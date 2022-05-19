@@ -1,0 +1,1727 @@
+---
+title: "LFXC_EEG - Experiment 2"
+author: "Ivan Grahek"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    theme: default
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## About the code
+
+Experiment: LFXC_EEG Experiment 2
+Code written by: Ivan Grahek (2021)
+Description: Code for the analysis of behavioral data for Experiment 2 of the LFXC_EEG project.  
+
+\newpage
+
+## Load the packages and set the paths
+
+```{r, warning=FALSE, message=FALSE}
+# Clear environment and import data
+
+# clear the environment
+rm(list=ls()) 
+#load packages and install them if they're not installed
+if (!require("pacman")) install.packages("pacman")
+ pacman::p_load(plyr,Rmisc,yarrr,BayesFactor,reshape2,brms, broom, tidyverse, brmstools, BEST, knitr, here, zoo, magrittr, pracma,xtable, Hmisc, ppcor, lme4,MuMIn,MASS, sjPlot, jtools, lmerTest, sjstats,coefplot,R.matlab,RColorBrewer,cowplot,bayesplot,rstan)
+
+#pacman::p_load(tidyverse)
+# set seed
+set.seed(42) 
+# set directory
+setwd(here())
+
+
+```
+
+<!-- ## Checking the efficacy learning model -->
+
+
+<!-- ### N trials back by reward -->
+
+<!-- ```{r,warning=FALSE, message=FALSE} -->
+
+<!-- # Set the working directory in order to load the models -->
+<!-- setwd(here("Analyses/Experiment2/Stats/brms/Cluster/output")) -->
+<!-- model = readRDS("model.efficacy.previous.feedback.rds") -->
+<!-- ``` -->
+
+<!-- Plotting the chains -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Plot chains -->
+<!-- plot(model, pars = "^b_", ask = FALSE, N=4) -->
+<!-- ``` -->
+
+<!-- R hat -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # R hat for all parameters -->
+<!-- stanplot(model, type="rhat_hist") -->
+<!-- ``` -->
+
+<!-- Posterior predictive check -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Plot chains -->
+<!-- # pp_check(model) -->
+<!-- ``` -->
+
+<!-- Summary of the model  -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Summary of the model -->
+<!-- x=summary(model)[["fixed"]] -->
+<!-- x$`HDI(95%)` = paste(format(round(x$`l-95% CI`, 2), nsmall = 2), format(round(x$`u-95% CI`, 2), nsmall = 2), sep=", ") -->
+<!-- x$`l-95% CI` = NULL -->
+<!-- x$`u-95% CI` = NULL -->
+<!-- x$Bulk_ESS = NULL -->
+<!-- x$Tail_ESS = NULL -->
+<!-- x$Rhat = NULL -->
+
+<!-- # Temp fix -->
+<!-- x = x[-12,]  -->
+
+<!-- # add a row name column -->
+<!-- names = rownames(x) -->
+<!-- x = cbind(names,x) -->
+<!-- rownames(x) = NULL -->
+
+<!-- # extract the stats -->
+
+<!-- #initialize the vector -->
+<!-- estimates = NA -->
+
+<!-- # Intercept -->
+<!-- t = hypothesis(model,"Intercept < 0") -->
+<!-- estimates[1] = t$hypothesis$Post.Prob -->
+
+<!-- # Efficacy_T02M1  -->
+<!-- t = hypothesis(model,"Efficacy_T02M1 <0") -->
+<!-- estimates[2] = t$hypothesis$Post.Prob -->
+
+<!-- # Efficacy_T12M1  -->
+<!-- t = hypothesis(model,"Efficacy_T12M1 <0") -->
+<!-- estimates[3] = t$hypothesis$Post.Prob -->
+
+<!-- # Efficacy_T22M1  -->
+<!-- t = hypothesis(model,"Efficacy_T22M1 <0") -->
+<!-- estimates[4] = t$hypothesis$Post.Prob -->
+
+<!-- # Efficacy_T22M1  -->
+<!-- t = hypothesis(model,"Efficacy_T32M1 <0") -->
+<!-- estimates[5] = t$hypothesis$Post.Prob -->
+
+<!-- # Efficacy_T42M1  -->
+<!-- t = hypothesis(model,"Efficacy_T42M1 <0") -->
+<!-- estimates[6] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewardedRew_min_NRew  -->
+<!-- t = hypothesis(model,"Reward_T0 <0") -->
+<!-- estimates[7] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewarded_T12M1  -->
+<!-- t = hypothesis(model,"Reward_T1 <0") -->
+<!-- estimates[8] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewarded_T22M1  -->
+<!-- t = hypothesis(model,"Reward_T2 <0") -->
+<!-- estimates[9] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewarded_T32M1  -->
+<!-- t = hypothesis(model,"Reward_T3 <0") -->
+<!-- estimates[10] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewarded_T42M1  -->
+<!-- t = hypothesis(model,"Reward_T4 <0") -->
+<!-- estimates[11] = t$hypothesis$Post.Prob -->
+
+
+<!-- # add the probabilities to the table -->
+<!-- x$Posterior = estimates -->
+
+<!-- # Add BFs -->
+
+<!-- # Intercept -->
+<!-- t = hypothesis(model,"Intercept=0") -->
+<!-- estimates[1] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # EffLvlNEff_min_Eff  -->
+<!-- t = hypothesis(model,"Efficacy_T02M1=0") -->
+<!-- estimates[2] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # Efficacy_T12M1  -->
+<!-- t = hypothesis(model,"Efficacy_T12M1=0") -->
+<!-- estimates[3] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # Efficacy_T12M1  -->
+<!-- t = hypothesis(model,"Efficacy_T22M1=0") -->
+<!-- estimates[4] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # Efficacy_T22M1  -->
+<!-- t = hypothesis(model,"Efficacy_T32M1=0") -->
+<!-- estimates[5] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # Efficacy_T42M1  -->
+<!-- t = hypothesis(model,"Efficacy_T42M1=0") -->
+<!-- estimates[6] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewardedRew_min_NRew  -->
+<!-- t = hypothesis(model,"Reward_T0=0") -->
+<!-- estimates[7] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewarded_T12M1  -->
+<!-- t = hypothesis(model,"Reward_T1=0") -->
+<!-- estimates[8] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewarded_T22M1  -->
+<!-- t = hypothesis(model,"Reward_T2=0") -->
+<!-- estimates[9] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewarded_T32M1  -->
+<!-- t = hypothesis(model,"Reward_T3=0") -->
+<!-- estimates[10] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewarded_T42M1  -->
+<!-- t = hypothesis(model,"Reward_T4=0") -->
+<!-- estimates[11] = 1/(t$hypothesis$Evid.Ratio) -->
+
+
+<!-- # add the probabilities to the table -->
+<!-- x$BF = estimates -->
+
+<!-- x$Estimate = as.numeric(x$Estimate) -->
+<!-- x$Est.Error = as.numeric(x$Est.Error) -->
+
+
+<!-- # edit the column names -->
+<!-- kable(x,digits = 2,format.args = list(scientific = FALSE),col.names = c("Parameter", "Estimate", "SE", "CI (95%)", "Posterior probability","BF10"),align = "lrrrrr") -->
+
+<!-- ``` -->
+
+<!-- Plot -->
+
+<!-- ```{r,warning=FALSE, message=FALSE} -->
+
+
+<!-- # Plot -->
+<!-- # Plot -->
+
+<!-- pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Exp2/FigureS1_A2.pdf") -->
+
+<!-- p = stanplot(model, pars = c("^b_Reward_T0", -->
+<!--                                         "^b_Reward_T1", -->
+<!--                                         "^b_Reward_T2", -->
+<!--                                         "^b_Reward_T3", -->
+<!--                                         "^b_Reward_T4", -->
+<!--                                       "^b_Efficacy_T02M1", -->
+<!--                                         "^b_Efficacy_T12M1", -->
+<!--                                         "^b_Efficacy_T22M1", -->
+<!--                                         "^b_Efficacy_T32M1", -->
+<!--                                         "^b_Efficacy_T42M1"))  -->
+
+<!-- p = p +  scale_y_discrete(labels= c( -->
+<!--             "t-4 Efficacy", -->
+<!--           "t-3 Efficacy", -->
+<!--           "t-2 Efficacy", -->
+<!--           "t-1 Efficacy", -->
+<!--           "t Efficacy", -->
+<!--           "t-4 Reward", -->
+<!--           "t-3 Reward", -->
+<!--           "t-2 Reward", -->
+<!--           "t-1 Reward", -->
+<!--           "t Reward"),limits = rev(levels(p[["data"]][["parameter"]]))) + -->
+
+<!--   geom_vline(xintercept=0, linetype="dashed", color = "black") + -->
+
+<!--   labs(x = "Regression estimate", y = "Feedback\n") +  -->
+<!--   scale_x_continuous(limits = c(-0.05,0.23),breaks=seq(-0.05, 0.25, by = 0.05)) +  -->
+
+
+<!--   # ggtitle("Predicting reported efficacy\n") +  -->
+
+<!--   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!--               text=element_text(colour="black", size = 18,family = ""), -->
+<!--               axis.text.x=element_text(colour="black", size = 18,family = ""), -->
+<!--               axis.text.y=element_text(colour="black", size = 18,family = "", face = "plain",hjust=0), -->
+<!--               axis.title=element_text(size=20,colour = "black",vjust = 1,family = "")) -->
+
+<!-- f.2.a=p -->
+<!-- p -->
+<!-- dev.off() -->
+
+<!-- p -->
+
+
+
+<!-- # plot only efficacy -->
+
+<!-- pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Exp2/Figure2_A.pdf") -->
+
+<!-- p = stanplot(model, pars = c("^b_Efficacy_T02M1", -->
+<!--                                         "^b_Efficacy_T12M1", -->
+<!--                                         "^b_Efficacy_T22M1", -->
+<!--                                         "^b_Efficacy_T32M1", -->
+<!--                                         "^b_Efficacy_T42M1")) -->
+
+<!-- p = p +  scale_y_discrete(labels= c( -->
+<!--             "t-4", -->
+<!--           "t-3", -->
+<!--           "t-2", -->
+<!--           "t-1", -->
+<!--           "t" -->
+<!--           ),limits = rev(levels(p[["data"]][["parameter"]]))) + -->
+
+<!--   geom_vline(xintercept=0, linetype="dashed", color = "black") + -->
+
+<!--   labs(x = "Regression estimate", y = "Feedback\n") +  -->
+<!--   scale_x_continuous(limits = c(-0.01,0.25),breaks=seq(-0.01, 0.25, by = 0.05)) +  -->
+
+
+<!--   # ggtitle("Predicting reported efficacy\n") +  -->
+
+<!--   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 25,  face = "bold",hjust = 0.5), -->
+<!--               text=element_text(colour="black", size = 20), -->
+<!--               axis.text.x=element_text(colour="black", size = 20), -->
+<!--               axis.text.y=element_text(colour="black", size = 20, face = "plain",hjust=0), -->
+<!--               axis.title=element_text(size=24,colour = "black",vjust = 1), -->
+<!--         ) -->
+
+<!-- p -->
+<!-- dev.off() -->
+
+<!-- p -->
+
+<!-- ``` -->
+
+<!-- ### Learning rates -->
+
+<!-- ```{r,warning=FALSE, message=FALSE} -->
+
+<!-- #### Import the learning rates for efficacy ######  -->
+
+<!-- learning_rates_efficacy = read.csv(file = here("Analyses/Experiment2/Stats/brms/Cluster/data","Exp2LRsEfficacy.csv"),header=T,na.strings="NaN") -->
+<!-- getwd() -->
+
+<!-- # Set parameters for plots -->
+<!-- set_theme(base =theme_bw(base_size = 15, base_family = "")) # font size and theme -->
+<!-- myColors = brewer.pal(3,"Set2") #colors -->
+<!-- # names(myColors) = levels(data$Congruency) -->
+<!-- # colScale = scale_colour_manual(name = "Congruency",values = myColors) -->
+<!-- barfill <- "#4271AE" -->
+<!-- barlines <- "#1F3552" -->
+
+<!-- # Positive efficacy learning rates  -->
+<!-- p =ggplot(learning_rates_efficacy, aes(positive_learning_rate)) +  -->
+<!--         geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill -->
+<!--         # ggtitle("Learning rates for the efficacy estimate\n") + -->
+<!--         theme_bw() + -->
+<!--         scale_y_continuous(limits = c(0,8),breaks=seq(0, 10, by = 1)) +  -->
+<!--         scale_x_continuous(limits = c(-0.01,0.5),breaks=seq(0, 0.6, by = 0.1)) +  -->
+<!--         geom_vline(xintercept=mean(learning_rates_efficacy$positive_learning_rate), linetype="dashed", color = "black") + -->
+<!--         geom_text(x=mean(learning_rates_efficacy$positive_learning_rate)+0.07, y=7, label=print(paste0("Mean =  ", round(mean(learning_rates_efficacy$positive_learning_rate),digits = 2))),size=5) +  -->
+
+
+<!--         labs(x = "Positive learning rate", y = "Count\n")+ -->
+<!--   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!--               text=element_text(colour="black", size = 14), -->
+<!--               axis.text.x=element_text(colour="black", size = 14), -->
+<!--               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0), -->
+<!--               axis.title=element_text(size=18,colour = "black",vjust = 1)) -->
+<!-- p -->
+
+
+<!-- # Negative efficacy learning rates  -->
+<!-- p =ggplot(learning_rates_efficacy, aes(negative_learning_rate)) +  -->
+<!--         geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill -->
+<!--         # ggtitle("Learning rates for the efficacy estimate\n") + -->
+<!--         theme_bw() + -->
+<!--         scale_y_continuous(limits = c(0,8),breaks=seq(0, 10, by = 1)) +  -->
+<!--         scale_x_continuous(limits = c(-0.01,0.5),breaks=seq(0, 0.6, by = 0.1)) +  -->
+<!--         geom_vline(xintercept=mean(learning_rates_efficacy$negative_learning_rate), linetype="dashed", color = "black") + -->
+<!--         geom_text(x=mean(learning_rates_efficacy$negative_learning_rate)+0.07, y=7, label=print(paste0("Mean =  ", round(mean(learning_rates_efficacy$negative_learning_rate),digits = 2))),size=5) +  -->
+
+
+<!--         labs(x = "Negative learning rate", y = "Count\n")+ -->
+<!--   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!--               text=element_text(colour="black", size = 14), -->
+<!--               axis.text.x=element_text(colour="black", size = 14), -->
+<!--               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0), -->
+<!--               axis.title=element_text(size=18,colour = "black",vjust = 1)) -->
+<!-- p -->
+
+
+<!-- pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Exp2/Figure2_C.pdf") -->
+
+
+<!-- # Positive vs. negative LRs  -->
+<!-- p =ggplot(learning_rates_efficacy, aes(positive_learning_rate,negative_learning_rate)) +  -->
+<!--         geom_point(colour = barlines, fill = barfill,size = 4)+ #colour = barlines, fill = barfill -->
+<!--         # ggtitle("Learning rates for the efficacy estimate\n") + -->
+<!--         theme_bw() + -->
+<!--         scale_y_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +  -->
+<!--         scale_x_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +  -->
+<!--         geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") + -->
+<!--         ylim(0,0.4)+ -->
+<!--   xlim(0,0.4)+ -->
+
+
+<!--         labs(x = "\nPositive learning rate", y = "Negative learning rate\n")+ -->
+<!--   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""), -->
+<!--               text=element_text(colour="black", size = 18,family = ""), -->
+<!--               axis.text.x=element_text(colour="black", size = 18,family = ""), -->
+<!--               axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""), -->
+<!--               axis.title=element_text(size=20,colour = "black",vjust = 1,family = "")) -->
+
+<!-- f.2.c = p -->
+<!-- p -->
+<!-- dev.off() -->
+
+<!-- p -->
+
+
+<!-- # ### Learning rates for efficacy for two drifts ###### -->
+<!-- #  -->
+<!-- # # Odd participants -->
+<!-- #  -->
+<!-- # learning_rates_efficacy = read.csv(file = here("Analyses/Experiment2/RL_fitting//4_Intercept_Pos_and_neg_learning_rate/results","learning_rates_efficacy.csv"),header=F,na.strings="NaN") -->
+<!-- #  -->
+<!-- #  -->
+<!-- #  -->
+<!-- # # add the subject names -->
+<!-- # colnames(learning_rates_efficacy)[5] = "SubID" -->
+<!-- # # learning_rates_efficacy$SubID = unique(data.raw$SubID) -->
+<!-- # learning_rates_efficacy$drift = ifelse(learning_rates_efficacy$SubID %% 2 ==0,"even","odd") -->
+<!-- #  -->
+<!-- #  -->
+<!-- # # rename the variable names -->
+<!-- # colnames(learning_rates_efficacy)[1] <- "positive_learning_rate" -->
+<!-- # colnames(learning_rates_efficacy)[2] <- "negative_learning_rate" -->
+<!-- # colnames(learning_rates_efficacy)[3] <- "initial_bias" -->
+<!-- # colnames(learning_rates_efficacy)[4] <- "subject" -->
+<!-- #  -->
+<!-- # learning_rates_efficacy = subset(learning_rates_efficacy,drift=="odd") -->
+<!-- #  -->
+<!-- #  -->
+<!-- # # Set parameters for plots -->
+<!-- # set_theme(base =theme_bw(base_size = 15, base_family = "")) # font size and theme -->
+<!-- # myColors = brewer.pal(3,"Set2") #colors -->
+<!-- # # names(myColors) = levels(data$Congruency) -->
+<!-- # # colScale = scale_colour_manual(name = "Congruency",values = myColors) -->
+<!-- # barfill <- "#4271AE" -->
+<!-- # barlines <- "#1F3552" -->
+<!-- #  -->
+<!-- # # Positive efficacy learning rates -->
+<!-- # p =ggplot(learning_rates_efficacy, aes(positive_learning_rate)) + -->
+<!-- #         geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill -->
+<!-- #         ggtitle("Learning rates - Odd subjects") + -->
+<!-- #         theme_bw() + -->
+<!-- #         scale_y_continuous(limits = c(0,8),breaks=seq(0, 10, by = 1)) + -->
+<!-- #         scale_x_continuous(limits = c(-0.01,0.5),breaks=seq(0, 0.6, by = 0.1)) + -->
+<!-- #         geom_vline(xintercept=mean(learning_rates_efficacy$positive_learning_rate), linetype="dashed", color = "black") + -->
+<!-- #         geom_text(x=mean(learning_rates_efficacy$positive_learning_rate)+0.07, y=7, label=print(paste0("Mean =  ", round(mean(learning_rates_efficacy$positive_learning_rate),digits = 3))),size=5) + -->
+<!-- #  -->
+<!-- #  -->
+<!-- #         labs(x = "Positive learning rate", y = "Count\n")+ -->
+<!-- #   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!-- #             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #               panel.border = element_blank(), -->
+<!-- #               panel.background = element_blank(), -->
+<!-- #               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!-- #               text=element_text(colour="black", size = 14), -->
+<!-- #               axis.text.x=element_text(colour="black", size = 14), -->
+<!-- #               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0), -->
+<!-- #               axis.title=element_text(size=18,colour = "black",vjust = 1)) -->
+<!-- # p -->
+<!-- #  -->
+<!-- # f.1 = p -->
+<!-- #  -->
+<!-- # # Negative efficacy learning rates -->
+<!-- # p =ggplot(learning_rates_efficacy, aes(negative_learning_rate)) + -->
+<!-- #         geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill -->
+<!-- #         ggtitle("Learning rates - Odd subjects") + -->
+<!-- #         theme_bw() + -->
+<!-- #         scale_y_continuous(limits = c(0,8),breaks=seq(0, 10, by = 1)) + -->
+<!-- #         scale_x_continuous(limits = c(-0.01,0.5),breaks=seq(0, 0.6, by = 0.1)) + -->
+<!-- #         geom_vline(xintercept=mean(learning_rates_efficacy$negative_learning_rate), linetype="dashed", color = "black") + -->
+<!-- #         geom_text(x=mean(learning_rates_efficacy$negative_learning_rate)+0.07, y=7, label=print(paste0("Mean =  ", round(mean(learning_rates_efficacy$negative_learning_rate),digits = 3))),size=5) + -->
+<!-- #  -->
+<!-- #  -->
+<!-- #         labs(x = "Negative learning rate", y = "Count\n")+ -->
+<!-- #   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!-- #             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #               panel.border = element_blank(), -->
+<!-- #               panel.background = element_blank(), -->
+<!-- #               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!-- #               text=element_text(colour="black", size = 14), -->
+<!-- #               axis.text.x=element_text(colour="black", size = 14), -->
+<!-- #               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0), -->
+<!-- #               axis.title=element_text(size=18,colour = "black",vjust = 1)) -->
+<!-- # p -->
+<!-- #  -->
+<!-- # f.2 = p -->
+<!-- # # Positive vs. negative LRs -->
+<!-- #  -->
+<!-- # pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Exp2/FigureS2_B.pdf") -->
+<!-- #  -->
+<!-- # p =ggplot(learning_rates_efficacy, aes(positive_learning_rate,negative_learning_rate)) + -->
+<!-- #         geom_point(colour = barlines, fill = barfill,size = 4)+ #colour = barlines, fill = barfill -->
+<!-- #         # ggtitle("Learning rate bias - Odd subjects") + -->
+<!-- #         theme_bw() + -->
+<!-- #         scale_y_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) + -->
+<!-- #         scale_x_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) + -->
+<!-- #         geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") + -->
+<!-- #         ylim(0,0.4)+ -->
+<!-- #   xlim(0,0.4)+ -->
+<!-- #  -->
+<!-- #  -->
+<!-- #         labs(x = "\nPositive learning rate", y = "Negative learning rate\n")+ -->
+<!-- #   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!-- #             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #               panel.border = element_blank(), -->
+<!-- #               panel.background = element_blank(), -->
+<!-- #               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""), -->
+<!-- #               text=element_text(colour="black", size = 18,family = ""), -->
+<!-- #               axis.text.x=element_text(colour="black", size = 18,family = ""), -->
+<!-- #               axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""), -->
+<!-- #               axis.title=element_text(size=20,colour = "black",vjust = 1,family = "")) -->
+<!-- #  -->
+<!-- # f.3 = p -->
+<!-- # p -->
+<!-- #  -->
+<!-- # dev.off() -->
+<!-- #  -->
+<!-- # p -->
+<!-- #  -->
+<!-- #  -->
+<!-- # # Even participants -->
+<!-- #  -->
+<!-- #  -->
+<!-- # learning_rates_efficacy = read.csv(file = here("Analyses/Experiment2/RL_fitting//4_Intercept_Pos_and_neg_learning_rate/results","learning_rates_efficacy.csv"),header=F,na.strings="NaN") -->
+<!-- #  -->
+<!-- #  -->
+<!-- #  -->
+<!-- # # add the subject names -->
+<!-- # colnames(learning_rates_efficacy)[5] = "SubID" -->
+<!-- #  -->
+<!-- # learning_rates_efficacy$drift = ifelse(learning_rates_efficacy$SubID %% 2 ==0,"even","odd") -->
+<!-- #  -->
+<!-- #  -->
+<!-- # # rename the variable names -->
+<!-- # colnames(learning_rates_efficacy)[1] <- "positive_learning_rate" -->
+<!-- # colnames(learning_rates_efficacy)[2] <- "negative_learning_rate" -->
+<!-- # colnames(learning_rates_efficacy)[3] <- "initial_bias" -->
+<!-- # colnames(learning_rates_efficacy)[4] <- "subject" -->
+<!-- #  -->
+<!-- # learning_rates_efficacy = subset(learning_rates_efficacy,drift=="even") -->
+<!-- #  -->
+<!-- #  -->
+<!-- # # Set parameters for plots -->
+<!-- # set_theme(base =theme_bw(base_size = 15, base_family = "")) # font size and theme -->
+<!-- # myColors = brewer.pal(3,"Set2") #colors -->
+<!-- # # names(myColors) = levels(data$Congruency) -->
+<!-- # # colScale = scale_colour_manual(name = "Congruency",values = myColors) -->
+<!-- # barfill <- "#4271AE" -->
+<!-- # barlines <- "#1F3552" -->
+<!-- #  -->
+<!-- # # Positive efficacy learning rates -->
+<!-- # p =ggplot(learning_rates_efficacy, aes(positive_learning_rate)) + -->
+<!-- #         geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill -->
+<!-- #         ggtitle("Learning rates - Even subjects") + -->
+<!-- #         theme_bw() + -->
+<!-- #         scale_y_continuous(limits = c(0,8),breaks=seq(0, 10, by = 1)) + -->
+<!-- #         scale_x_continuous(limits = c(-0.01,0.5),breaks=seq(0, 0.6, by = 0.1)) + -->
+<!-- #         geom_vline(xintercept=mean(learning_rates_efficacy$positive_learning_rate), linetype="dashed", color = "black") + -->
+<!-- #         geom_text(x=mean(learning_rates_efficacy$positive_learning_rate)+0.07, y=7, label=print(paste0("Mean =  ", round(mean(learning_rates_efficacy$positive_learning_rate),digits = 3))),size=5) + -->
+<!-- #  -->
+<!-- #  -->
+<!-- #         labs(x = "Positive learning rate", y = "Count\n")+ -->
+<!-- #   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!-- #             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #               panel.border = element_blank(), -->
+<!-- #               panel.background = element_blank(), -->
+<!-- #               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!-- #               text=element_text(colour="black", size = 14), -->
+<!-- #               axis.text.x=element_text(colour="black", size = 14), -->
+<!-- #               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0), -->
+<!-- #               axis.title=element_text(size=18,colour = "black",vjust = 1)) -->
+<!-- # p -->
+<!-- #  -->
+<!-- # f.4 = p -->
+<!-- #  -->
+<!-- # # Negative efficacy learning rates -->
+<!-- # p =ggplot(learning_rates_efficacy, aes(negative_learning_rate)) + -->
+<!-- #         geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill -->
+<!-- #         ggtitle("Learning rates - Even subjects") + -->
+<!-- #         theme_bw() + -->
+<!-- #         scale_y_continuous(limits = c(0,8),breaks=seq(0, 10, by = 1)) + -->
+<!-- #         scale_x_continuous(limits = c(-0.01,0.5),breaks=seq(0, 0.6, by = 0.1)) + -->
+<!-- #         geom_vline(xintercept=mean(learning_rates_efficacy$negative_learning_rate), linetype="dashed", color = "black") + -->
+<!-- #         geom_text(x=mean(learning_rates_efficacy$negative_learning_rate)+0.07, y=7, label=print(paste0("Mean =  ", round(mean(learning_rates_efficacy$negative_learning_rate),digits = 3))),size=5) + -->
+<!-- #  -->
+<!-- #  -->
+<!-- #         labs(x = "Negative learning rate", y = "Count\n")+ -->
+<!-- #   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!-- #             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #               panel.border = element_blank(), -->
+<!-- #               panel.background = element_blank(), -->
+<!-- #               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!-- #               text=element_text(colour="black", size = 14), -->
+<!-- #               axis.text.x=element_text(colour="black", size = 14), -->
+<!-- #               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0), -->
+<!-- #               axis.title=element_text(size=18,colour = "black",vjust = 1)) -->
+<!-- # p -->
+<!-- # f.5 = p -->
+<!-- #  -->
+<!-- # # Positive vs. negative LRs -->
+<!-- #  -->
+<!-- # pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Exp2/FigureS2_D.pdf") -->
+<!-- #  -->
+<!-- # p =ggplot(learning_rates_efficacy, aes(positive_learning_rate,negative_learning_rate)) + -->
+<!-- #         geom_point(colour = barlines, fill = barfill,size = 4)+ #colour = barlines, fill = barfill -->
+<!-- #         # ggtitle("Learning rate bias - Even subjects") + -->
+<!-- #         theme_bw() + -->
+<!-- #         scale_y_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) + -->
+<!-- #         scale_x_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) + -->
+<!-- #         geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") + -->
+<!-- #         ylim(0,0.4)+ -->
+<!-- #   xlim(0,0.4)+ -->
+<!-- #  -->
+<!-- #  -->
+<!-- #         labs(x = "\nPositive learning rate", y = "Negative learning rate\n")+ -->
+<!-- #   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!-- #             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!-- #               panel.border = element_blank(), -->
+<!-- #               panel.background = element_blank(), -->
+<!-- #               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""), -->
+<!-- #               text=element_text(colour="black", size = 18,family = ""), -->
+<!-- #               axis.text.x=element_text(colour="black", size = 18,family = ""), -->
+<!-- #               axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""), -->
+<!-- #               axis.title=element_text(size=20,colour = "black",vjust = 1,family = "")) -->
+<!-- #  -->
+<!-- # f.6 = p -->
+<!-- # p -->
+<!-- #  -->
+<!-- # dev.off() -->
+<!-- #  -->
+<!-- # p -->
+
+<!-- ``` -->
+
+<!-- ### Statistical comparison of the learning rates for all subjects -->
+<!-- #### Import the model -->
+
+<!-- ```{r,warning=T, message=T} -->
+<!-- # Set the working directory in order to load the models -->
+<!-- setwd(here("Analyses/Experiment2/Stats/brms/Cluster/output")) -->
+
+<!-- # Import the models -->
+
+<!-- model = readRDS("model.ttest.learning_rates_efficacy.rds") -->
+
+<!-- ``` -->
+
+
+
+<!-- #### Checking the model -->
+
+<!-- Plotting the chains -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Plot chains -->
+<!-- plot(model, pars = "^b_", ask = FALSE, N=4) -->
+<!-- ``` -->
+
+<!-- R hat -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # R hat for all parameters -->
+<!-- stanplot(model, type="rhat_hist") -->
+<!-- ``` -->
+
+
+<!-- Posterior predictive check -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Plot chains -->
+<!-- # pp_check(model) -->
+<!-- ``` -->
+
+<!-- Summary of the model  -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Summary of the model -->
+<!-- x=summary(model)[["fixed"]] -->
+<!-- x$`HDI(95%)` = paste(format(round(x$`l-95% CI`, 2), nsmall = 2), format(round(x$`u-95% CI`, 2), nsmall = 2), sep=", ") -->
+<!-- x$`l-95% CI` = NULL -->
+<!-- x$`u-95% CI` = NULL -->
+<!-- x$Bulk_ESS = NULL -->
+<!-- x$Rhat = NULL -->
+<!-- kable(x,digits = 2,col.names = c("Parameter", "Estimate", "SE", "HDI (95%)"),align = "lrrrr") -->
+<!-- ``` -->
+
+<!-- #### Plotting the model -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+
+
+<!-- p = marginal_effects(model, effects = "Learning_rate_type",plot=FALSE) -->
+
+<!-- p = plot(p,plot=FALSE)[[1]]+ -->
+<!--         xlab(expression(paste("Learning rate type")))+ -->
+<!--         ylab(paste("Learning rate"))+ -->
+<!--         theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--               panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!--               text=element_text(colour="black", size = 14), -->
+<!--               axis.text.x=element_text(colour="black", size = 14), -->
+<!--               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0), -->
+<!--               axis.title=element_text(size=18,colour = "black",vjust = 1)) -->
+<!-- p -->
+
+
+<!-- ``` -->
+
+
+<!-- #### Inference about the model -->
+
+
+<!-- Check the LR difference -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- post = posterior_samples(model, "^b") -->
+<!-- reward = post[["b_Learning_rate_type2M1"]] -->
+
+<!-- hypothesis(model,"Learning_rate_type2M1  >0") -->
+
+
+<!-- plotPost(reward, xlab = "", col = "#b3cde0", cex = 1, showCurve = FALSE, compVal = 0) -->
+<!-- ``` -->
+
+<!-- BF for the LR difference -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+
+
+<!-- hypothesis(model,"Learning_rate_type2M1  =0") -->
+
+
+<!-- ``` -->
+
+
+
+
+
+
+<!-- ## Checking the reward learning model -->
+
+<!-- ### N trials back by reward -->
+
+<!-- ```{r,warning=FALSE, message=FALSE} -->
+
+<!-- # Set the working directory in order to load the models -->
+<!-- setwd(here("Analyses/Experiment2/Stats/brms/Cluster/output")) -->
+
+<!-- model = readRDS("model.reward.previous.feedback.rds") -->
+<!-- ``` -->
+
+<!-- Plotting the chains -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Plot chains -->
+<!-- plot(model, pars = "^b_", ask = FALSE, N=4) -->
+<!-- ``` -->
+
+<!-- R hat -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # R hat for all parameters -->
+<!-- stanplot(model, type="rhat_hist") -->
+<!-- ``` -->
+
+<!-- Posterior predictive check -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Plot chains -->
+<!-- # pp_check(model) -->
+<!-- ``` -->
+
+
+<!-- Summary of the model  -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Summary of the model -->
+<!-- x=summary(model)[["fixed"]] -->
+<!-- x$`HDI(95%)` = paste(format(round(x$`l-95% CI`, 2), nsmall = 2), format(round(x$`u-95% CI`, 2), nsmall = 2), sep=", ") -->
+<!-- x$`l-95% CI` = NULL -->
+<!-- x$`u-95% CI` = NULL -->
+<!-- x$Bulk_ESS = NULL -->
+<!-- x$Tail_ESS = NULL -->
+<!-- x$Rhat = NULL -->
+
+<!-- # add a row name column -->
+<!-- names = rownames(x) -->
+<!-- x = cbind(names,x) -->
+<!-- rownames(x) = NULL -->
+
+<!-- # Temp fix -->
+<!-- x = x[-12,]  -->
+
+<!-- # extract the stats -->
+
+<!-- #initialize the vector -->
+<!-- estimates = NA -->
+
+<!-- # Intercept -->
+<!-- t = hypothesis(model,"Intercept < 0") -->
+<!-- estimates[1] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewardedRew_min_NRew  -->
+<!-- t = hypothesis(model,"Reward_T0 <0") -->
+<!-- estimates[2] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewarded_T12M1  -->
+<!-- t = hypothesis(model,"Reward_T1 <0") -->
+<!-- estimates[3] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewarded_T22M1  -->
+<!-- t = hypothesis(model,"Reward_T2 <0") -->
+<!-- estimates[4] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewarded_T32M1  -->
+<!-- t = hypothesis(model,"Reward_T3 <0") -->
+<!-- estimates[5] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewarded_T42M1  -->
+<!-- t = hypothesis(model,"Reward_T4 <0") -->
+<!-- estimates[6] = t$hypothesis$Post.Prob -->
+
+<!-- # EffLvlNEff_min_Eff  -->
+<!-- t = hypothesis(model,"Efficacy_T02M1 <0") -->
+<!-- estimates[7] = t$hypothesis$Post.Prob -->
+
+<!-- # Efficacy_T12M1  -->
+<!-- t = hypothesis(model,"Efficacy_T12M1 <0") -->
+<!-- estimates[8] = t$hypothesis$Post.Prob -->
+
+<!-- # IsRewarded_T22M1  -->
+<!-- t = hypothesis(model,"Efficacy_T22M1 <0") -->
+<!-- estimates[9] = t$hypothesis$Post.Prob -->
+
+<!-- # Efficacy_T22M1  -->
+<!-- t = hypothesis(model,"Efficacy_T32M1 <0") -->
+<!-- estimates[10] = t$hypothesis$Post.Prob -->
+
+<!-- # Efficacy_T42M1  -->
+<!-- t = hypothesis(model,"Efficacy_T42M1 <0") -->
+<!-- estimates[11] = t$hypothesis$Post.Prob -->
+
+
+<!-- # add the probabilities to the table -->
+<!-- x$Posterior = estimates -->
+
+<!-- # Add BFs -->
+
+<!-- # Intercept -->
+<!-- t = hypothesis(model,"Intercept=0") -->
+<!-- estimates[1] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewardedRew_min_NRew  -->
+<!-- t = hypothesis(model,"Reward_T0=0") -->
+<!-- estimates[2] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewarded_T12M1  -->
+<!-- t = hypothesis(model,"Reward_T1=0") -->
+<!-- estimates[3] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewarded_T22M1  -->
+<!-- t = hypothesis(model,"Reward_T2=0") -->
+<!-- estimates[4] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewarded_T32M1  -->
+<!-- t = hypothesis(model,"Reward_T3=0") -->
+<!-- estimates[5] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewarded_T42M1  -->
+<!-- t = hypothesis(model,"Reward_T4=0") -->
+<!-- estimates[6] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # EffLvlNEff_min_Eff  -->
+<!-- t = hypothesis(model,"Efficacy_T02M1=0") -->
+<!-- estimates[7] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # Efficacy_T12M1  -->
+<!-- t = hypothesis(model,"Efficacy_T12M1=0") -->
+<!-- estimates[8] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # IsRewarded_T22M1  -->
+<!-- t = hypothesis(model,"Efficacy_T22M1=0") -->
+<!-- estimates[9] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # Efficacy_T22M1  -->
+<!-- t = hypothesis(model,"Efficacy_T32M1=0") -->
+<!-- estimates[10] = 1/(t$hypothesis$Evid.Ratio) -->
+
+<!-- # Efficacy_T42M1  -->
+<!-- t = hypothesis(model,"Efficacy_T42M1=0") -->
+<!-- estimates[11] = 1/(t$hypothesis$Evid.Ratio) -->
+
+
+<!-- # add the probabilities to the table -->
+<!-- x$BF = estimates -->
+
+<!-- x$Estimate = as.numeric(x$Estimate) -->
+<!-- x$Est.Error = as.numeric(x$Est.Error) -->
+
+<!-- # edit the column names -->
+<!-- kable(x,digits = 2,format.args = list(scientific = FALSE),col.names = c("Parameter", "Estimate", "SE", "CI (95%)", "Posterior probability","BF10"),align = "lrrrrr") -->
+
+<!-- ``` -->
+
+
+<!-- Plot -->
+
+<!-- ```{r,warning=FALSE, message=FALSE} -->
+
+
+<!-- # Plot -->
+<!-- # Plot -->
+
+<!-- pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Exp2/FigureS1_A1.pdf") -->
+
+<!-- p = stanplot(model, pars = c("^b_Reward_T0", -->
+<!--                                         "^b_Reward_T1", -->
+<!--                                         "^b_Reward_T2", -->
+<!--                                         "^b_Reward_T3", -->
+<!--                                         "^b_Reward_T4", -->
+<!--                              "^b_Efficacy_T02M1", -->
+<!--                                         "^b_Efficacy_T12M1", -->
+<!--                                         "^b_Efficacy_T22M1", -->
+<!--                                         "^b_Efficacy_T32M1", -->
+<!--                                         "^b_Efficacy_T42M1"))  -->
+<!-- p = p +  scale_y_discrete(labels= c( -->
+<!--             "t-4 Efficacy", -->
+<!--           "t-3 Efficacy", -->
+<!--           "t-2 Efficacy", -->
+<!--           "t-1 Efficacy", -->
+<!--           "t Efficacy", -->
+<!--           "t-4 Reward", -->
+<!--           "t-3 Reward", -->
+<!--           "t-2 Reward", -->
+<!--           "t-1 Reward", -->
+<!--           "t Reward"),limits = rev(levels(p[["data"]][["parameter"]]))) + -->
+
+<!--   geom_vline(xintercept=0, linetype="dashed", color = "black") + -->
+
+<!--   labs(x = "Regression estimate", y = "Feedback\n") +  -->
+<!--   scale_x_continuous(limits = c(-0.05,0.23),breaks=seq(-0.05, 0.25, by = 0.05)) +  -->
+
+
+<!--   # ggtitle("Predicting reported efficacy\n") +  -->
+
+<!--   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!--               text=element_text(colour="black", size = 18,family = ""), -->
+<!--               axis.text.x=element_text(colour="black", size = 18,family = ""), -->
+<!--               axis.text.y=element_text(colour="black", size = 18,family = "", face = "plain",hjust=0), -->
+<!--               axis.title=element_text(size=20,colour = "black",vjust = 1,family = "")) -->
+
+<!-- f.2.a=p -->
+<!-- p -->
+
+<!-- dev.off() -->
+
+<!-- p -->
+
+
+
+
+
+
+
+<!-- ``` -->
+
+<!-- ### Learning rates -->
+
+<!-- ```{r,warning=FALSE, message=FALSE} -->
+
+<!-- #### Import the learning rates for reward ######  -->
+
+<!-- learning_rates_reward = read.csv(file = here("Analyses/Experiment2/Stats/brms/Cluster/data","Exp2LRsReward.csv"),header=T,na.strings="NaN") -->
+
+
+
+
+<!-- # Set parameters for plots -->
+<!-- set_theme(base =theme_bw(base_size = 15, base_family = "")) # font size and theme -->
+<!-- myColors = brewer.pal(3,"Set2") #colors -->
+<!-- # names(myColors) = levels(data$Congruency) -->
+<!-- # colScale = scale_colour_manual(name = "Congruency",values = myColors) -->
+<!-- barfill <- "#4271AE" -->
+<!-- barlines <- "#1F3552" -->
+
+<!-- # Positive efficacy learning rates  -->
+<!-- p =ggplot(learning_rates_reward, aes(positive_learning_rate)) +  -->
+<!--         geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill -->
+<!--         # ggtitle("Learning rates for the efficacy estimate\n") + -->
+<!--         theme_bw() + -->
+<!--         scale_y_continuous(limits = c(0,8),breaks=seq(0, 10, by = 1)) +  -->
+<!--         scale_x_continuous(limits = c(-0.01,0.5),breaks=seq(0, 0.6, by = 0.1)) +  -->
+<!--         geom_vline(xintercept=mean(learning_rates_reward$positive_learning_rate), linetype="dashed", color = "black") + -->
+<!--         geom_text(x=mean(learning_rates_reward$positive_learning_rate)+0.07, y=7, label=print(paste0("Mean =  ", round(mean(learning_rates_reward$positive_learning_rate),digits = 2))),size=5) +  -->
+
+
+<!--         labs(x = "Positive learning rate", y = "Count\n")+ -->
+<!--   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!--               text=element_text(colour="black", size = 14), -->
+<!--               axis.text.x=element_text(colour="black", size = 14), -->
+<!--               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0), -->
+<!--               axis.title=element_text(size=18,colour = "black",vjust = 1)) -->
+<!-- p -->
+
+
+<!-- # Negative efficacy learning rates  -->
+<!-- p =ggplot(learning_rates_reward, aes(negative_learning_rate)) +  -->
+<!--         geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill -->
+<!--         # ggtitle("Learning rates for the efficacy estimate\n") + -->
+<!--         theme_bw() + -->
+<!--         scale_y_continuous(limits = c(0,8),breaks=seq(0, 10, by = 1)) +  -->
+<!--         scale_x_continuous(limits = c(-0.01,0.5),breaks=seq(0, 0.6, by = 0.1)) +  -->
+<!--         geom_vline(xintercept=mean(learning_rates_reward$negative_learning_rate), linetype="dashed", color = "black") + -->
+<!--         geom_text(x=mean(learning_rates_reward$negative_learning_rate)+0.07, y=7, label=print(paste0("Mean =  ", round(mean(learning_rates_reward$negative_learning_rate),digits = 2))),size=5) +  -->
+
+
+<!--         labs(x = "Negative learning rate", y = "Count\n")+ -->
+<!--   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!--               text=element_text(colour="black", size = 14), -->
+<!--               axis.text.x=element_text(colour="black", size = 14), -->
+<!--               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0), -->
+<!--               axis.title=element_text(size=18,colour = "black",vjust = 1)) -->
+
+<!-- f.2.d = p -->
+<!-- p -->
+
+<!-- # Positive vs. negative LRs  -->
+
+<!-- pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Exp2/FigureS1_C.pdf") -->
+
+<!-- p =ggplot(learning_rates_reward, aes(positive_learning_rate,negative_learning_rate)) +  -->
+<!--         geom_point(colour = barlines, fill = barfill,size = 4)+ #colour = barlines, fill = barfill -->
+<!--         # ggtitle("Learning rates for the efficacy estimate\n") + -->
+<!--         theme_bw() + -->
+<!--         scale_y_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +  -->
+<!--         scale_x_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +  -->
+<!--         geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") + -->
+<!--         ylim(0,0.4)+ -->
+<!--   xlim(0,0.4)+ -->
+
+<!--         labs(x = "\nPositive learning rate", y = "Negative learning rate\n")+ -->
+<!--   theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--             panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--             panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""), -->
+<!--               text=element_text(colour="black", size = 18,family = ""), -->
+<!--               axis.text.x=element_text(colour="black", size = 18,family = ""), -->
+<!--               axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""), -->
+<!--               axis.title=element_text(size=20,colour = "black",vjust = 1,family = "")) -->
+
+
+<!-- p -->
+
+<!-- dev.off() -->
+
+<!-- p -->
+
+
+
+<!-- ``` -->
+
+<!-- ### Statistical comparison of the learning rates -->
+<!-- #### Import the model -->
+
+<!-- ```{r,warning=T, message=T} -->
+<!-- # Set the working directory in order to load the models -->
+<!-- setwd(here("Analyses/Experiment2/Stats/brms/Cluster/output")) -->
+
+<!-- # Import the models -->
+
+<!-- model = readRDS("model.ttest.learning_rates_reward.rds") -->
+
+<!-- ``` -->
+
+
+
+<!-- #### Checking the model -->
+
+<!-- Plotting the chains -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Plot chains -->
+<!-- plot(model, pars = "^b_", ask = FALSE, N=4) -->
+<!-- ``` -->
+
+<!-- R hat -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # R hat for all parameters -->
+<!-- stanplot(model, type="rhat_hist") -->
+<!-- ``` -->
+
+
+<!-- Posterior predictive check -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Plot chains -->
+<!-- pp_check(model) -->
+<!-- ``` -->
+
+<!-- Summary of the model  -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Summary of the model -->
+<!-- x=summary(model)[["fixed"]] -->
+<!-- x$`HDI(95%)` = paste(format(round(x$`l-95% CI`, 2), nsmall = 2), format(round(x$`u-95% CI`, 2), nsmall = 2), sep=", ") -->
+<!-- x$`l-95% CI` = NULL -->
+<!-- x$`u-95% CI` = NULL -->
+<!-- x$Bulk_ESS = NULL -->
+<!-- x$Rhat = NULL -->
+<!-- kable(x,digits = 2,col.names = c("Parameter", "Estimate", "SE", "HDI (95%)"),align = "lrrrr") -->
+<!-- ``` -->
+
+<!-- #### Plotting the model -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+
+
+<!-- p = marginal_effects(model, effects = "Learning_rate_type",plot=FALSE) -->
+
+<!-- p = plot(p,plot=FALSE)[[1]]+ -->
+<!--         xlab(expression(paste("Learning rate type")))+ -->
+<!--         ylab(paste("Learning rate"))+ -->
+<!--         theme(axis.line = element_line(size=1, colour = "black"), -->
+<!--               panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"), -->
+<!--               panel.border = element_blank(),  -->
+<!--               panel.background = element_blank(), -->
+<!--               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5), -->
+<!--               text=element_text(colour="black", size = 14), -->
+<!--               axis.text.x=element_text(colour="black", size = 14), -->
+<!--               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0), -->
+<!--               axis.title=element_text(size=18,colour = "black",vjust = 1)) -->
+<!-- p -->
+
+
+<!-- ``` -->
+
+
+<!-- #### Inference about the model -->
+
+
+<!-- Check the LR difference -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- post = posterior_samples(model, "^b") -->
+<!-- reward = post[["b_Learning_rate_type2M1"]] -->
+
+<!-- hypothesis(model,"Learning_rate_type2M1  >0") -->
+
+
+<!-- plotPost(reward, xlab = "", col = "#b3cde0", cex = 1, showCurve = FALSE, compVal = 0) -->
+<!-- ``` -->
+
+<!-- BF for the LR difference -->
+
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+
+
+<!-- hypothesis(model,"Learning_rate_type2M1  =0") -->
+
+
+<!-- ``` -->
+
+
+
+
+
+
+## Correct RTs 
+
+### Import the model
+
+```{r,warning=T, message=T}
+# Set the working directory in order to load the models
+setwd(here("Analyses/Experiment2/Stats/brms/Cluster/output"))
+# Import the models
+
+model = readRDS("model.congruency_plus_efficacy.RT_0.6Acc.rds")
+# loo = readRDS("compare.RT.loo")
+# bR2.1 = readRDS("bR2.model.congruency.RT")
+# bR2.2 = readRDS("bR2.model.congruency_plus_efficacy.RT")
+# bR2.3 = readRDS("bR2.model.congruency_times_efficacy.RT")
+# 
+# # Print the loo
+# kable(as.data.frame(loo)[,-(3:6)])
+
+```
+
+
+
+### Checking the model
+
+Plotting the chains
+```{r, warning=FALSE, message=FALSE}
+# Plot chains
+plot(model, pars = "^b_", ask = FALSE, N=4)
+```
+
+R hat
+```{r, warning=FALSE, message=FALSE}
+# R hat for all parameters
+stanplot(model, type="rhat_hist")
+```
+
+
+Posterior predictive check
+```{r, warning=FALSE, message=FALSE}
+# Plot chains
+# pp_check(model)
+```
+
+
+### Plotting the model
+
+```{r, warning=FALSE, message=FALSE}
+
+p = marginal_effects(model, effects = "Congruency",plot=FALSE) 
+pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Exp2/FigureS4_A.pdf")
+p = plot(p,plot=FALSE)[[1]]+
+        labs(x = "Congruency", y = "Reaction times (ms)")+
+        # geom_errorbar(size=1) +
+        # geom_point(size=2) +
+        theme(axis.line = element_line(size=1, colour = "black"),
+              panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""),
+              text=element_text(colour="black", size = 18,family = ""),
+              axis.text.x=element_text(colour="black", size = 18,family = ""),
+              axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""),
+              axis.title=element_text(size=20,colour = "black",vjust = 1,family = ""))
+
+
+p
+dev.off()
+p
+
+p = marginal_effects(model, effects = "mbased_reward_prev")
+
+p = plot(p,plot=FALSE)[[1]]+
+        labs(x = "Reward rate (model-based estimate)", y = "Reaction times (ms)")+
+            # scale_y_continuous(limits = c(600,670),breaks=seq(600, 680, by = 10)) + 
+        # scale_x_continuous(limits = c(-0.6,0.5),breaks=seq(-0.5, 0.5, by = 0.1)) + 
+        theme(axis.line = element_line(size=1, colour = "black"),
+              panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""),
+              text=element_text(colour="black", size = 18,family = ""),
+              axis.text.x=element_text(colour="black", size = 18,family = ""),
+              axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""),
+              axis.title=element_text(size=20,colour = "black",vjust = 1,family = ""))
+
+
+p
+
+
+p = marginal_effects(model, effects = "mbased_efficacy_prev")
+pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Exp2/Figure4_A.pdf",4,7)
+
+scaleFUN <- function(x) sprintf("%.1f", x)
+
+p = plot(p,plot=FALSE)[[1]]+
+        labs(x = "Efficacy estimate", y = "Reaction times (ms)")+
+        scale_x_continuous(labels = scaleFUN)    +    
+  # scale_y_continuous(limits = c(600,670),breaks=seq(600, 680, by = 10)) + 
+        # scale_x_continuous(limits = c(-0.6,0.5),breaks=seq(-0.5, 0.5, by = 0.1)) + 
+        theme(axis.line = element_line(size=1, colour = "black"),
+              panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""),
+              text=element_text(colour="black", size = 18,family = ""),
+              axis.text.x=element_text(colour="black", size = 18,family = ""),
+              axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""),
+              axis.title=element_text(size=20,colour = "black",vjust = 1,family = ""))
+
+p
+dev.off()
+p
+
+
+
+
+# 
+# p = marginal_effects(model, effects = "mbased_efficacy_prev:Congruency",plot=FALSE)
+# 
+# p = plot(p,plot=FALSE)[[1]]+
+#         xlab("Efficacy (model-based estimate)")+
+#         ylab("Reaction times (ms)")+
+#         theme(axis.line = element_line(size=1, colour = "black"),
+#               panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+#               panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+#               panel.border = element_blank(), 
+#               panel.background = element_blank(),
+#               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+#               text=element_text(colour="black", size = 14),
+#               axis.text.x=element_text(colour="black", size = 14),
+#               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+#               axis.title=element_text(size=18,colour = "black",vjust = 1))
+# 
+# p
+
+
+```
+
+
+### Table for the results
+```{r, warning=FALSE, message=FALSE}
+# Summary of the model
+x=summary(model)[["fixed"]]
+x$`HDI(95%)` = paste(format(round(x$`l-95% CI`, 2), nsmall = 2), format(round(x$`u-95% CI`, 2), nsmall = 2), sep=", ")
+x$`l-95% CI` = NULL
+x$`u-95% CI` = NULL
+x$Bulk_ESS = NULL
+x$Rhat = NULL
+x$Tail_ESS = NULL
+
+# add a row name column
+names = rownames(x)
+x = cbind(names,x)
+rownames(x) = NULL
+
+
+
+# extract the stats
+
+#initialize the vector
+estimates = NA
+
+# Intercept
+t = hypothesis(model,"Intercept < 0")
+estimates[1] = t$hypothesis$Post.Prob
+
+# Congruency
+t = hypothesis(model,"Congruencyincongruent<0")
+estimates[2] = t$hypothesis$Post.Prob
+
+# mbased_efficacy_prev
+t = hypothesis(model,"mbased_efficacy_prev<0")
+estimates[3] = t$hypothesis$Post.Prob
+
+# mbased_reward_prev
+t = hypothesis(model,"mbased_reward_prev<0")
+estimates[4] = t$hypothesis$Post.Prob
+
+# mbased_reward_prev
+t = hypothesis(model,"scaledIntervalLength<0")
+estimates[5] = t$hypothesis$Post.Prob
+
+# mbased_reward_prev
+t = hypothesis(model,"scaledIntervalCong<0")
+estimates[6] = t$hypothesis$Post.Prob
+
+# add the probabilities to the table
+x$Posterior = estimates
+
+# Add BFs
+
+# Intercept
+t = hypothesis(model,"Intercept = 624")
+estimates[1] = t$hypothesis$Evid.Ratio
+
+# CongruencyFacilitation
+t = hypothesis(model,"Congruencyincongruent=15.54")
+estimates[2] = t$hypothesis$Evid.Ratio
+
+# mbased_efficacy_prev
+t = hypothesis(model,"mbased_efficacy_prev=-10.26")
+estimates[3] = t$hypothesis$Evid.Ratio
+
+# mbased_reward_prev
+t = hypothesis(model,"mbased_reward_prev=0")
+estimates[4] = t$hypothesis$Evid.Ratio
+
+# mbased_reward_prev
+t = hypothesis(model,"scaledIntervalLength=0")
+estimates[5] = t$hypothesis$Evid.Ratio
+
+# mbased_reward_prev
+t = hypothesis(model,"scaledIntervalCong=0")
+estimates[6] = t$hypothesis$Evid.Ratio
+
+# add the probabilities to the table
+x$BF = estimates
+
+# turn into numeric to round
+x$Estimate = as.numeric(x$Estimate)
+x$Est.Error = as.numeric(x$Est.Error)
+
+# edit the column names
+kable(x,digits = 2,col.names = c("Parameter", "Estimate", "SE", "CI (95%)", "Posterior probability","BF01"),align = "lrrrrr")
+```
+
+
+### Inference about the model
+
+
+Check the congruency effect
+
+```{r, warning=FALSE, message=FALSE}
+post = posterior_samples(model, "^b")
+interference = post[["b_Congruencyincongruent"]]
+
+plotPost(interference, xlab = "", col = "#b3cde0", cex = 1, showCurve = FALSE, compVal = 0)
+```
+
+Check the reward effect
+
+```{r, warning=FALSE, message=FALSE}
+post = posterior_samples(model, "^b")
+reward = post[["b_mbased_reward_prev"]]
+
+plotPost(reward, xlab = "", col = "#b3cde0", cex = 1, showCurve = FALSE, compVal = 0)
+```
+
+
+Check the efficacy effect
+
+```{r, warning=FALSE, message=FALSE}
+post = posterior_samples(model, "^b")
+reward = post[["b_mbased_efficacy_prev"]]
+
+plotPost(reward, xlab = "", col = "#b3cde0", cex = 1, showCurve = FALSE, compVal = 0)
+
+p=hypothesis(model,"mbased_efficacy_prev>0")
+p
+plot(p)
+p=hypothesis(model,"mbased_efficacy_prev=-10.26")
+p
+plot(p)
+```
+
+
+## Accuracy
+
+### Import the model
+
+```{r,warning=T, message=T}
+# Set the working directory in order to load the models
+setwd(here("Analyses/Experiment2/Stats/brms/Cluster/output"))
+
+# Import the models
+
+model = readRDS("model.congruency_plus_efficacy.Acc_0.6Acc.rds")
+# loo = readRDS("compare.Acc.loo")
+# bR2.1 = readRDS("bR2.model.congruency.Acc")
+# bR2.2 = readRDS("bR2.model.congruency_plus_efficacy.Acc")
+# bR2.3 = readRDS("bR2.model.congruency_times_efficacy.Acc")
+# 
+# # Print the loo
+# kable(as.data.frame(loo)[,-(3:6)])
+```
+
+
+
+### Checking the model
+
+Plotting the chains
+```{r, warning=FALSE, message=FALSE}
+# Plot chains
+plot(model, pars = "^b_", ask = FALSE, N=4)
+```
+
+R hat
+```{r, warning=FALSE, message=FALSE}
+# R hat for all parameters
+stanplot(model, type="rhat_hist")
+```
+
+
+Posterior predictive check
+```{r, warning=FALSE, message=FALSE}
+# Plot chains
+#pp_check(model)
+```
+
+
+### Plotting the model
+
+```{r, warning=FALSE, message=FALSE}
+
+p = marginal_effects(model, effects = "Congruency",plot=FALSE) 
+pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Exp2/FigureS4_B.pdf")
+
+p = plot(p,plot=FALSE)[[1]]+
+        labs(x = "Congruency", y = "Accuracy")+
+        #   geom_errorbar(size=1) +
+        # geom_point(size=2) +
+        theme(axis.line = element_line(size=1, colour = "black"),
+              panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""),
+              text=element_text(colour="black", size = 18,family = ""),
+              axis.text.x=element_text(colour="black", size = 18,family = ""),
+              axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""),
+              axis.title=element_text(size=20,colour = "black",vjust = 1,family = ""))
+
+
+p
+dev.off()
+p
+
+p = marginal_effects(model, effects = "mbased_reward_prev")
+
+p = plot(p,plot=FALSE)[[1]]+
+        labs(x = "Reward rate (model-based estimate)", y = "Accuracy")+
+        theme(axis.line = element_line(size=1, colour = "black"),
+              panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+f.3.e = p
+
+p = marginal_effects(model, effects = "mbased_efficacy_prev")
+scaleFUN <- function(x) sprintf("%.1f", x)
+p = plot(p,plot=FALSE)[[1]]+
+        labs(x = "Efficacy (model-based estimate)", y = "Accuracy")+
+        scale_x_continuous(labels = scaleFUN) + 
+        theme(axis.line = element_line(size=1, colour = "black"),
+              panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+f.3.f = p
+
+
+
+
+
+# p = marginal_effects(model, effects = "mbased_efficacy_prev:Congruency",plot=FALSE)
+# 
+# p = plot(p,plot=FALSE)[[1]]+
+#         xlab("Efficacy (model-based estimate)")+
+#         ylab("Accuracy")+
+#         theme(axis.line = element_line(size=1, colour = "black"),
+#               panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+#               panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+#               panel.border = element_blank(), 
+#               panel.background = element_blank(),
+#               plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+#               text=element_text(colour="black", size = 14),
+#               axis.text.x=element_text(colour="black", size = 14),
+#               axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+#               axis.title=element_text(size=18,colour = "black",vjust = 1))
+# 
+# p
+
+
+
+
+```
+
+
+### Table for the results
+```{r, warning=FALSE, message=FALSE}
+# Summary of the model
+x=summary(model)[["fixed"]]
+x$`HDI(95%)` = paste(format(round(x$`l-95% CI`, 2), nsmall = 2), format(round(x$`u-95% CI`, 2), nsmall = 2), sep=", ")
+x$`l-95% CI` = NULL
+x$`u-95% CI` = NULL
+x$Bulk_ESS = NULL
+x$Rhat = NULL
+x$Tail_ESS = NULL
+
+# add a row name column
+names = rownames(x)
+x = cbind(names,x)
+rownames(x) = NULL
+
+
+
+# extract the stats
+
+#initialize the vector
+estimates = NA
+
+# Intercept
+t = hypothesis(model,"Intercept < 0")
+estimates[1] = t$hypothesis$Post.Prob
+
+# Congruency
+t = hypothesis(model,"Congruencyincongruent<0")
+estimates[2] = t$hypothesis$Post.Prob
+
+# mbased_efficacy_prev
+t = hypothesis(model,"mbased_efficacy_prev<0")
+estimates[3] = t$hypothesis$Post.Prob
+
+# mbased_reward_prev
+t = hypothesis(model,"mbased_reward_prev<0")
+estimates[4] = t$hypothesis$Post.Prob
+
+# mbased_reward_prev
+t = hypothesis(model,"scaledIntervalLength<0")
+estimates[5] = t$hypothesis$Post.Prob
+
+# mbased_reward_prev
+t = hypothesis(model,"scaledIntervalCong<0")
+estimates[6] = t$hypothesis$Post.Prob
+
+# add the probabilities to the table
+x$Posterior = estimates
+
+# Add BFs
+
+# Intercept
+t = hypothesis(model,"Intercept = 624")
+estimates[1] = t$hypothesis$Evid.Ratio
+
+# CongruencyFacilitation
+t = hypothesis(model,"Congruencyincongruent=15.54")
+estimates[2] = t$hypothesis$Evid.Ratio
+
+# mbased_efficacy_prev
+t = hypothesis(model,"mbased_efficacy_prev=-10.26")
+estimates[3] = t$hypothesis$Evid.Ratio
+
+# mbased_reward_prev
+t = hypothesis(model,"mbased_reward_prev=0")
+estimates[4] = t$hypothesis$Evid.Ratio
+
+# mbased_reward_prev
+t = hypothesis(model,"scaledIntervalLength=0")
+estimates[5] = t$hypothesis$Evid.Ratio
+
+# mbased_reward_prev
+t = hypothesis(model,"scaledIntervalCong=0")
+estimates[6] = t$hypothesis$Evid.Ratio
+
+# add the probabilities to the table
+x$BF = estimates
+
+# turn into numeric to round
+x$Estimate = as.numeric(x$Estimate)
+x$Est.Error = as.numeric(x$Est.Error)
+
+# edit the column names
+kable(x,digits = 2,col.names = c("Parameter", "Estimate", "SE", "CI (95%)", "Posterior probability","BF01"),align = "lrrrrr")
+```
+
+### Inference about the model
+
+
+Check the congruency effect
+
+```{r, warning=FALSE, message=FALSE}
+post = posterior_samples(model, "^b")
+interference = post[["b_Congruencyincongruent"]]
+
+plotPost(interference, xlab = "", col = "#b3cde0", cex = 1, showCurve = FALSE, compVal = 0)
+```
+
+Check the reward effect
+
+```{r, warning=FALSE, message=FALSE}
+post = posterior_samples(model, "^b")
+reward = post[["b_mbased_reward_prev"]]
+
+plotPost(reward, xlab = "", col = "#b3cde0", cex = 1, showCurve = FALSE, compVal = 0)
+```
+
+
+Check the efficacy effect
+
+```{r, warning=FALSE, message=FALSE}
+post = posterior_samples(model, "^b")
+reward = post[["b_mbased_efficacy_prev"]]
+
+plotPost(reward, xlab = "", col = "#b3cde0", cex = 1, showCurve = FALSE, compVal = 0)
+
+p=hypothesis(model,"mbased_efficacy_prev>0")
+p
+plot(p)
+p=hypothesis(model,"mbased_efficacy_prev=-10.26")
+p
+plot(p)
+```
+

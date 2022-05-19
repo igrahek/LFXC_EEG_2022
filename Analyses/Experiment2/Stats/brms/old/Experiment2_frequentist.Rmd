@@ -1,0 +1,1604 @@
+---
+title: "LFXC_interval - behavioral results"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    theme: default
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# About the code
+
+Experiment: FXC_ILR
+Version: TSS_LFXC20210602 --> probes every 3,4,5 intervals (36 efficacy probes)
+Code written by: Ivan Grahek & Mahalia Prater Fahey
+Description: Code for the analysis of behavioral data for the FXC_ILR project. This is an interval and garden task version of the LFXC task.  
+
+\newpage
+
+# Preprocessing
+
+## Importing data
+```{r, warning=FALSE, message=FALSE}
+# Clear environment and import data
+
+# clear the environment
+rm(list=ls()) 
+#load packages and install them if they're not installed
+if (!require("pacman")) install.packages("pacman")
+ pacman::p_load(plyr,Rmisc,yarrr,BayesFactor,reshape2,brms, broom, tidyverse, brmstools, BEST, knitr, here, zoo, magrittr, pracma,xtable, Hmisc, ppcor, lme4,MuMIn,MASS, sjPlot, jtools, lmerTest, sjstats,coefplot,R.matlab,RColorBrewer,cowplot,bayesplot,rstan,RColorBrewer,rstudioapi,corrplot,PCAmixdata,psych,rmarkdown,knitr,kable,mclust)
+
+ # set seed
+set.seed(42) 
+
+
+```
+
+## Set current directory and paths, and other script parameters 
+```{r}
+# Paths for the data
+DataPath=paste0('../../../../Data/Experiment2/')
+date1='2021-06-02'
+date2='2021-07-15'
+TaskVersion1="TSS_LFXC20210602"
+TaskVersion2="TSS_LFXC20210714"
+
+
+# Criteria for Exclusion 
+thresh_minIntervals_performed = 288  # Must have performed the whole experiment 
+# thresh_minBlocks_performed =288      # Total blocks per condition = 30
+thresh_maxRT_performed = 2000       # Max RT (ms)
+thresh_minRT_performed = 250        # Min RT (ms)
+thresh_meanAcc_subj = .6
+thresh_quiz_mistakes = 10           # Exclude if there are more than 10 errors for any of the quizzes
+complete_Task= 1                  #Exclude if they did not complete the task
+thresh_maxTimeonTask = 7800 # Exclude if they took too long to complete the task (in seconds - over 130 minutes)
+
+
+# Data scrubbing variables
+task_ISI = 250                      # constant variable set in task
+
+# Set colors for plotting
+# To visualize all of the palettes, used: display.brewer.all()
+p.colors.hex<-brewer.pal(n = 8, name = 'Paired')
+
+RunAvgWindow = 5
+```
+
+## Import Raw Participant Data
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+#import raw data
+
+# First dataset
+data.prolific1 = read_csv(paste0(DataPath,"prolific_export_TSS_LFXC20210602.csv"))
+
+#Second dataset
+data.prolific2 = read_csv(paste0(DataPath,"prolific_export_TSS_LFXC20210714.csv"))
+
+# Merge the datasets
+data.prolific = rbind(data.prolific1,data.prolific2)
+
+```
+
+## Filter Prolific Participant logs by Approved 
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, include=FALSE}
+data.prolific.filter<- data.prolific %>%
+   dplyr::select(participant_id,status)%>%
+   dplyr::filter(status=="APPROVED")%>%
+    dplyr::select(participant_id)%>%
+    distinct(participant_id)%>%
+    dplyr::rename(SubID=participant_id)
+```
+
+
+## Load in datasets
+
+```{r include=FALSE}
+# Load in the behavioral data
+# First dataset
+df.trial.raw1<-read.csv(paste0(DataPath,'trialdata_TSS_LFXCGarden_',date1,'.csv'))
+#Second dataset
+df.trial.raw2<-read.csv(paste0(DataPath,'trialdata_TSS_LFXCGarden_',date2,'.csv'))
+# Separate uniqueid from version
+df.trial.raw2 <- df.trial.raw2 %>%
+  separate(col = uniqueid, sep = ":", c("uniqueid","Version"), remove = TRUE) 
+
+#Merge the datasets
+df.trial.raw<-rbind(df.trial.raw1,df.trial.raw2)
+
+# fix the task coding error which made lemon(image)-pear(word) pairs coded as congruent. they should be incogruent
+df.trial.raw$type = as.character(df.trial.raw$type)
+df.trial.raw$type=ifelse(df.trial.raw$image=='lemon' & df.trial.raw$word=='PEAR','incongruent',df.trial.raw$type)
+df.trial.raw$type = as.factor(df.trial.raw$type)
+
+#Load in quiz data (how many incorrect responses per quiz question)
+df.quiz1<-read.csv(paste0(DataPath,'questiondata_TSS_LFXCGarden_',date1,'.csv'), header=F,
+                     col.names = c('uniqueid','attribute','value','')) %>%
+  spread(attribute,value) %>%
+  separate(col = uniqueid, sep = ":", c("SubID","Version"), remove = FALSE) %>%
+  filter(SubID %in% df.trial.raw$uniqueid) %>%  #took this out: !is.na(trialNum), and: , uniqueid %in% df.quiz$uniqueid
+  dplyr::select(SubID,incorrect1,incorrect2,incorrect3,incorrect4,incorrect5,EndTask) %>%
+  mutate_at(vars(incorrect1:EndTask),as.character,
+            vars(incorrect1:EndTask),as.numeric) %>%
+  filter(incorrect1 < thresh_quiz_mistakes, incorrect2 < thresh_quiz_mistakes,
+         incorrect3 < thresh_quiz_mistakes, incorrect4 < thresh_quiz_mistakes,
+         incorrect5 < thresh_quiz_mistakes, EndTask == complete_Task)
+
+df.quiz2<-read.csv(paste0(DataPath,'questiondata_TSS_LFXCGarden_',date2,'.csv'),header=F,
+                     col.names = c('uniqueid','attribute','value')) %>%
+  spread(attribute,value) %>%
+  separate(col = uniqueid, sep = ":", c("SubID","Version"), remove = FALSE) %>%
+  filter(SubID %in% df.trial.raw$uniqueid) %>%  #took this out: !is.na(trialNum), and: , uniqueid %in% df.quiz$uniqueid
+  dplyr::select(SubID,incorrect1,incorrect2,incorrect3,incorrect4,incorrect5,EndTask) %>%
+  mutate_at(vars(incorrect1:EndTask),as.character,
+            vars(incorrect1:EndTask),as.numeric) %>%
+  filter(incorrect1 < thresh_quiz_mistakes, incorrect2 < thresh_quiz_mistakes,
+         incorrect3 < thresh_quiz_mistakes, incorrect4 < thresh_quiz_mistakes,
+         incorrect5 < thresh_quiz_mistakes, EndTask == complete_Task)
+
+#Merge the quiz data
+df.quiz<-rbind(df.quiz1,df.quiz2)
+```
+
+
+## Format dataframe for Trial-level data
+
+
+```{r include=FALSE, warning=FALSE}
+# Subjects to exclude, automatically excludes if more than 2000 trials per subject
+sub.trials<-data.frame(table(df.trial.raw$uniqueid))
+# Subjects to exclude if they spent more than 2h on the task
+sub.exclude.timeOnTask <-data.prolific$participant_id[which(data.prolific$time_taken>thresh_maxTimeonTask)]  
+
+# # Subjects to exclude based on low accuracy
+# summary_table = ddply(df.trial.raw,.(uniqueid),plyr::summarize,
+#                       MeanAcc=mean(hit,na.rm=TRUE))
+# sub.exclude.accuracy = summary_table$unique[which(summary_table$MeanAcc<thresh_meanAcc_subj)]
+
+# Copy the probe responses to all trials in an interval
+df.trial = df.trial.raw
+df.trial$prompt = as.numeric(df.trial.raw$prompt)
+df.trial$rating = as.numeric(df.trial.raw$rating)
+
+# save the original number of participants
+participantsPre = length(unique(df.trial$uniqueid))
+
+#Format Trial-level data
+df.trial <- df.trial %>%
+  filter(Version==TaskVersion1|Version==TaskVersion2, uniqueid %in% df.quiz$SubID) %>% #they did one of our two versions and have quiz data
+  filter(!uniqueid %in% sub.exclude.timeOnTask)  # Exclude the subjects who took too long to complete the task
+  #filter(!uniqueid %in% sub.exclude.accuracy) # Exclude the subjects with low accuracy
+
+
+
+# Rename subjects to normal numbers
+df.trial = df.trial %>% group_by(uniqueid) %>% mutate(SubID=cur_group_id()) 
+
+# Add the probe responses
+df.trial <- df.trial %>% 
+  
+  dplyr::group_by(uniqueid,blockNum,intervalNum,intervalType) %>% 
+    dplyr::mutate(reward = max(unique(intervalScorePoints),na.rm=TRUE),
+           probeType = max(unique(prompt),na.rm=TRUE),
+           probeResponse = max(rating,na.rm=TRUE)) %>% ungroup()
+
+
+# Turn the no probe response intervals into NA      
+df.trial$probeResponse <- ifelse(df.trial$probeResponse==-Inf,NA,df.trial$probeResponse)
+
+# Separate the reward probe response
+df.trial$RewardProbeResp <- (ifelse(df.trial$probeType==1,df.trial$probeResponse,NA))/100
+
+# Separate the efficacy probe response
+df.trial$EfficacyProbeResp <- (ifelse(df.trial$probeType==2,df.trial$probeResponse,NA))/100
+
+# Range normalize the efficacy and the reward probe response for every subject (bring to the 0-1 scale)
+# df.trial <- df.trial %>% 
+#   group_by(uniqueid) %>% 
+#   mutate(RewardProbeResp=(RewardProbeResp-min(RewardProbeResp,na.rm = T))/(max(RewardProbeResp,na.rm = T)-min(RewardProbeResp,na.rm = T)),
+#          EfficacyProbeResp=(EfficacyProbeResp-min(EfficacyProbeResp,na.rm = T))/(max(EfficacyProbeResp,na.rm = T)-min(EfficacyProbeResp,na.rm = T))) %>% ungroup()
+
+
+# summary_table = ddply(df.trial,.(uniqueid,blockNum),plyr::summarize,
+#                                                 nIntervals = length(unique(intervalNum)))
+# dplyr::filter(!PROLIFIC_PID %in%df.Error$PROLIFIC_PID) %>% # DEBBIE/MAHALIA- FIGURE OUT LATER
+
+# Create vector of trial number for each subject's session
+tmp.trialdata<-df.trial %>% group_by(uniqueid) %>% 
+  dplyr::summarise(numtrials=n(), .groups="keep")
+for (t in 1:dim(tmp.trialdata)[1]) { 
+  Trials = seq(1,tmp.trialdata$numtrials[t])
+  if (t==1) {
+    TrialSessionNum <- Trials
+  }  else {
+    TrialSessionNum <- append(TrialSessionNum,Trials)
+  }
+}
+
+# Create additional variables and reorganize experimental factors
+df.trial <- df.trial %>% 
+  mutate(AccRT=ifelse(hit==1,rt,NaN),
+         type=droplevels(factor(type)),
+         congruence=as.numeric(type=='congruent'), # 1=congruent, 0=incongruent
+         EfficacyLevel=intervalType,
+         reward = reward,
+         IntervalsPerBlock = max(unique(intervalNum)),
+         IntervalSessionNum = IntervalsPerBlock*(blockNum-1) + intervalNum,
+         TrialSessionNum = TrialSessionNum,
+         scaledIntervalSessionNum = scale(IntervalSessionNum, center = TRUE,scale = TRUE),
+         scaledTrialSessionNum = scale(TrialSessionNum, center = TRUE, scale = TRUE),
+         scaledIntervalBlockNum = scale(intervalNum, center = TRUE,scale = TRUE),
+         scaledTrialIntervalNum = scale(trialNum, center = TRUE, scale = TRUE),
+         scaledIntervalLength = scale(intervalLength, center = TRUE, scale = TRUE),
+         log10_AccRT=log10(AccRT),
+         scaled_log10_AccRT=scale(log10_AccRT, center = TRUE, scale = TRUE),
+         lowerWord=tolower(word),
+         ErrorType=case_when(
+           hit==0 & response!=lowerWord~ "random",
+           hit==0 & response==lowerWord ~ "automatic",
+           hit==1~ "NoError"))
+
+
+
+```
+
+
+## Format dataframe for interval-level data
+```{r include=FALSE}
+
+
+df.interval <- df.trial %>% 
+  group_by(SubID, Version,blockNum,intervalNum,intervalLength,EfficacyLevel) %>% 
+  dplyr::summarise(trialsPerInterval = n(),
+                   IntervalISI = (trialsPerInterval-1)*task_ISI, # Calculate Total ISI per interval 
+                   Interval_Acc=mean(hit,na.rm=T),
+                   Interval_sum_Acc=sum(hit,na.rm=T), 
+                   Interval_AccRT=mean(AccRT,na.rm=T),
+                   Interval_log10_AccRT=mean(log10_AccRT,na.rm=T),
+                   Interval_RT=mean(rt,na.rm=T),
+                   Interval_Congruence=mean(congruence,na.rm=T), 
+                   scaledIntervalSessionNum = mean(scaledIntervalSessionNum),
+                   scaledIntervalBlockNum = mean(scaledIntervalBlockNum),
+                   scaledIntervalLength = mean(scaledIntervalLength), 
+                   .groups="keep",
+                   reward = max(as.numeric(reward),na.rm = T),
+                   EfficacyProbeResp = ifelse( !all(is.na(EfficacyProbeResp)), max(EfficacyProbeResp, na.rm=T), NA),
+                   RewardProbeResp = ifelse( !all(is.na(RewardProbeResp)), max(RewardProbeResp, na.rm=T), NA))  %>% ungroup() %>% 
+                    
+  mutate(Interval_norm_sum_Acc=((Interval_sum_Acc)/(intervalLength-IntervalISI))*1000, 
+         scaledIntervalCong = scale(Interval_Congruence, center = TRUE, scale = TRUE), 
+         scale_Interval_log10_AccRT=scale(Interval_log10_AccRT, center = TRUE, scale = TRUE)) 
+
+# Calculate the linear extrapolation of the subjective estimates
+df.interval <- df.interval %>%
+  group_by(SubID) %>%
+    mutate(EfficacyProbeRespLin = na.approx(EfficacyProbeResp, na.rm=F),
+                  RewardProbeRespLin = na.approx(RewardProbeResp, na.rm=F))  %>% ungroup()
+
+# Create the previous efficacy/reward subjective estimates variables
+df.interval = ddply(df.interval,.(SubID),transform,
+                    RewardProbeRespLin_prev = append(RewardProbeRespLin,NA,after=0)[-(length(RewardProbeRespLin)+1)],   
+                    EfficacyProbeRespLin_prev = append(EfficacyProbeRespLin,NA,after=0)[-(length(EfficacyProbeRespLin)+1)])
+
+
+# Add the overall Interval number
+df.interval = ddply(df.interval,.(SubID),plyr::mutate,
+                       Interval = 1:(length(df.interval$intervalNum)/length(unique(df.interval$SubID))))
+
+# Recode efficacy level to numeric for calculating the running average
+df.interval = df.interval %>%
+     mutate_at("EfficacyLevel",funs(recode(.,"random_low" = "0","performance_low" = "1")))
+
+df.interval$EfficacyLevel = as.numeric(as.character(df.interval$EfficacyLevel))
+
+
+df.interval$reward = as.numeric(as.character(df.interval$reward))
+#df.interval$reward = scale(df.interval$reward, scale= TRUE, center = FALSE)
+
+# Range normalize reward magnitude to 0-1
+df.interval <- df.interval %>% 
+  group_by(SubID) %>% 
+  mutate(reward=(reward-min(reward,na.rm = T))/(max(reward,na.rm = T)-min(reward,na.rm = T)))%>% ungroup()
+
+
+# Create previous efficacy variable
+df.interval = ddply(df.interval,.(SubID),transform,
+                    Efficacy_T0 = EfficacyLevel,   
+                    Efficacy_T1 = append(EfficacyLevel,NA,after=0)[-(length(EfficacyLevel)+1)],
+                    Efficacy_T2 = append(EfficacyLevel,c(NA,NA),after=0)[-c((length(EfficacyLevel)+1),(length(EfficacyLevel)+2))],
+                    Efficacy_T3 = append(EfficacyLevel,c(NA,NA,NA),after=0)[-c((length(EfficacyLevel)+1),(length(EfficacyLevel)+2),(length(EfficacyLevel)+3))],
+                    Efficacy_T4 = append(EfficacyLevel,c(NA,NA,NA,NA),after=0)[-c((length(EfficacyLevel)+1),(length(EfficacyLevel)+2),(length(EfficacyLevel)+3),(length(EfficacyLevel)+4))],
+                    Efficacy_T5 = append(EfficacyLevel,c(NA,NA,NA,NA,NA),after=0)[-c((length(EfficacyLevel)+1),(length(EfficacyLevel)+2),(length(EfficacyLevel)+3),(length(EfficacyLevel)+4),(length(EfficacyLevel)+5))],
+                    Efficacy_T6 = append(EfficacyLevel,c(NA,NA,NA,NA,NA,NA),after=0)[-c((length(EfficacyLevel)+1),(length(EfficacyLevel)+2),(length(EfficacyLevel)+3),(length(EfficacyLevel)+4),(length(EfficacyLevel)+5),(length(EfficacyLevel)+6))],
+                    Efficacy_T7 = append(EfficacyLevel,c(NA,NA,NA,NA,NA,NA,NA),after=0)[-c((length(EfficacyLevel)+1),(length(EfficacyLevel)+2),(length(EfficacyLevel)+3),(length(EfficacyLevel)+4),(length(EfficacyLevel)+5),(length(EfficacyLevel)+6),(length(EfficacyLevel)+7))],
+                    Efficacy_T8 = append(EfficacyLevel,c(NA,NA,NA,NA,NA,NA,NA,NA),after=0)[-c((length(EfficacyLevel)+1),(length(EfficacyLevel)+2),(length(EfficacyLevel)+3),(length(EfficacyLevel)+4),(length(EfficacyLevel)+5),(length(EfficacyLevel)+6),(length(EfficacyLevel)+7),(length(EfficacyLevel)+8))],
+                    Efficacy_T9 = append(EfficacyLevel,c(NA,NA,NA,NA,NA,NA,NA,NA,NA),after=0)[-c((length(EfficacyLevel)+1),(length(EfficacyLevel)+2),(length(EfficacyLevel)+3),(length(EfficacyLevel)+4),(length(EfficacyLevel)+5),(length(EfficacyLevel)+6),(length(EfficacyLevel)+7),(length(EfficacyLevel)+8),(length(EfficacyLevel)+9))])
+
+
+# Create previous reward variable
+df.interval = ddply(df.interval,.(SubID),transform,
+                    Reward_T0 = reward,   
+                    Reward_T1 = append(reward,NA,after=0)[-(length(reward)+1)],
+                    Reward_T2 = append(reward,c(NA,NA),after=0)[-c((length(reward)+1),(length(reward)+2))],
+                    Reward_T3 = append(reward,c(NA,NA,NA),after=0)[-c((length(reward)+1),(length(reward)+2),(length(reward)+3))],
+                    Reward_T4 = append(reward,c(NA,NA,NA,NA),after=0)[-c((length(reward)+1),(length(reward)+2),(length(reward)+3),(length(reward)+4))],
+                    Reward_T5 = append(reward,c(NA,NA,NA,NA,NA),after=0)[-c((length(reward)+1),(length(reward)+2),(length(reward)+3),(length(reward)+4),(length(reward)+5))],
+                    Reward_T6 = append(reward,c(NA,NA,NA,NA,NA,NA),after=0)[-c((length(reward)+1),(length(reward)+2),(length(reward)+3),(length(reward)+4),(length(reward)+5),(length(reward)+6))],
+                    Reward_T7 = append(reward,c(NA,NA,NA,NA,NA,NA,NA),after=0)[-c((length(reward)+1),(length(reward)+2),(length(reward)+3),(length(reward)+4),(length(reward)+5),(length(reward)+6),(length(reward)+7))],
+                    Reward_T8 = append(reward,c(NA,NA,NA,NA,NA,NA,NA,NA),after=0)[-c((length(reward)+1),(length(reward)+2),(length(reward)+3),(length(reward)+4),(length(reward)+5),(length(reward)+6),(length(reward)+7),(length(reward)+8))],
+                    Reward_T9 = append(reward,c(NA,NA,NA,NA,NA,NA,NA,NA,NA),after=0)[-c((length(reward)+1),(length(reward)+2),(length(reward)+3),(length(reward)+4),(length(reward)+5),(length(reward)+6),(length(reward)+7),(length(reward)+8),(length(reward)+9))])
+
+
+# Turn categorical variables into factors
+# Recode and turn into a factor
+EfficacyLag = c("Efficacy_T0",
+                 "Efficacy_T1",
+                 "Efficacy_T2",
+                 "Efficacy_T3",
+                 "Efficacy_T4",
+                 "Efficacy_T5",
+                 "Efficacy_T6",
+                 "Efficacy_T7",
+                 "Efficacy_T8",
+                 "Efficacy_T9")
+
+# df.interval = df.interval %>%
+#      mutate_at(EfficacyLag,funs(recode(.,"0" = "Random","1" = "Performance"))) %>%
+#       mutate_at(EfficacyLag,funs(factor(.)))
+
+# Recode and turn into a factor
+RewardLag = c("Reward_T0",
+                 "Reward_T1",
+                 "Reward_T2",
+                 "Reward_T3",
+                 "Reward_T4",
+                 "Reward_T5",
+                 "Reward_T6",
+                 "Reward_T7",
+                 "Reward_T8",
+                 "Reward_T9")
+
+#Add the running averages for reward, efficacy, and performance
+  df.interval =  df.interval %>%
+     dplyr::group_by(SubID)%>%
+     dplyr::mutate(
+       runAvgEfficacy = rollapply(Efficacy_T0,list(seq(-RunAvgWindow, -1)),mean, partial=TRUE,fill = NA, na.rm = TRUE, align = "right"),
+       runAvgReward = rollapply(Reward_T0,list(seq(-RunAvgWindow, -1)),mean, partial=TRUE,fill = NA, na.rm = TRUE, align = "right"),
+       runAvgPerformance = rollapply(Interval_norm_sum_Acc,list(seq(-3, -1)),mean, partial=TRUE,fill = NA, na.rm = TRUE, align = "right"))
+  
+  
+# Add the aditional variable that splits the data into quantiles based on running averages or extrapolated subjective estimates
+df.interval <- df.interval %>%
+  group_by(SubID) %>%
+    mutate(EfficacyProbeRespLin_quartile = ntile(EfficacyProbeRespLin_prev, 4),
+           RewardProbeRespLin_quartile = ntile(RewardProbeRespLin_prev, 4),
+           runAvgEfficacy_quartile = ntile(runAvgEfficacy, 4),
+           runAvgReward_quartile = ntile(runAvgReward, 4))  %>% ungroup()
+
+```
+
+
+# Design checks
+
+
+```{r, results='asis' }
+
+#Summary of the design 
+summary_table = ddply(df.interval,.(SubID,EfficacyLevel),plyr::summarize,
+                      nIntervals = length(Interval_Acc),
+                      MeanRT=mean(Interval_AccRT,na.rm=TRUE), # mean RT per condition
+                      SDRT=sd(Interval_AccRT,na.rm=TRUE),
+                      MeanAcc=mean(Interval_Acc,na.rm=TRUE), 
+                      SDAcc=sd(Interval_Acc,na.rm=TRUE),
+                      nEffProbes = length(Interval_Acc[is.na(EfficacyProbeResp)==F]),
+                      nRewProbes = length(Interval_Acc[is.na(RewardProbeResp)==F]),
+                      intervalCongruence = mean(Interval_Congruence, na.rm=T))
+
+
+print(kable(summary_table, align="l", caption="Design check"))
+
+
+#Summary of the design 
+summary_table = ddply(df.interval,.(blockNum),plyr::summarize,
+                      nIntervals = length(unique(intervalNum)))
+
+print(kable(summary_table, align="l", caption="Block number check"))
+
+
+```
+
+
+
+
+# Save data for model fitting
+
+```{r }
+
+# # Edit the dataset
+# data_RLfit = df.interval %>%
+#   dplyr::select(SubID, 
+#                 Interval_RT, 
+#                 Efficacy_T1, 
+#                 Reward_T1,
+#                 EfficacyLevel,
+#                 reward,
+#                 EfficacyProbeRespLin,
+#                 RewardProbeRespLin,
+#                 EfficacyProbeResp,
+#                 RewardProbeResp,
+#                 runAvgEfficacy,
+#                 runAvgReward,
+#                 Interval) %>%
+#   
+# 
+#   dplyr::rename(SubID=SubID, 
+#                 RT = Interval_RT, 
+#                 Efficacy_T1 = Efficacy_T1, 
+#                 IsRewarded_T1 = Reward_T1,
+#                 EffLvl = EfficacyLevel,
+#                 IsRewarded = reward,
+#                 ReportedEfficacyLin = EfficacyProbeRespLin,
+#                 ReportedRewRateLin = RewardProbeRespLin,
+#                 EfficacyProbeResp = EfficacyProbeResp,
+#                 RewRateProbeResp = RewardProbeResp,
+#                 runAvgEfficacy = runAvgEfficacy,
+#                 runAvgRewRate = runAvgReward,
+#                 Interval = Interval)
+# 
+# 
+# 
+# data_RLfit = as.matrix(data_RLfit)
+# 
+# 
+# # # Save out the data
+# write.csv(x = data_RLfit, file = paste0('RL_fit_data_','TSS_LFXC_MEGA','.csv'), row.names = FALSE)
+
+```
+
+# Import the model-based estimates
+
+```{r include=FALSE}
+
+#### Import the learning rates for efficacy ###### 
+
+
+learning_rates = read.csv("../../RL_fitting/4_Intercept_Pos_and_neg_learning_rate/results/learning_rates_efficacy.csv", header = F)
+
+# add the subject names
+learning_rates$SubID = unique(df.interval$SubID)
+
+# rename the variable names
+colnames(learning_rates)[1] <- "positive_learning_rate"
+colnames(learning_rates)[2] <- "negative_learning_rate"
+colnames(learning_rates)[3] <- "initial_bias"
+colnames(learning_rates)[5] <- "subject"
+colnames(learning_rates)[6] <- "BIC"
+
+learning_rates_efficacy = learning_rates
+
+# add a new variable in the main dataset in which efficacy is coded as 1 or 0
+df.interval$EffLvl_forLR = df.interval$EfficacyLevel
+
+##### Calculate the model-based efficacy estimate ######
+
+# for each subject
+for (s in 1:length(unique(df.interval$SubID))) {
+  # for each trial
+  for (t in 1:length(unique(df.interval$Interval))) {
+    # if this is the first trial use the inital estimate
+    if (t == 1) {
+      v = learning_rates$initial_bias[s]
+    } else {
+      v = v
+    }
+    
+    # save the BIC value
+    df.interval$BIC_efficacy[df.interval$SubID == unique(df.interval$SubID)[s] &
+                               df.interval$Interval == t] = learning_rates$BIC[s]
+    # calculate the signed prediction error for this subject for this trial (difference between the actual and the expected efficacy)
+    df.interval$signed_PE_efficacy[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                     df.interval$Interval == t] = df.interval$EffLvl_forLR[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                                                                df.interval$Interval == t] - v
+    
+    # calculate the unsigned prediction error for this subject for this trial (absolute difference between the actual and the expected efficacy)
+    df.interval$unsigned_PE_efficacy[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                       df.interval$Interval == t] = abs(df.interval$EffLvl_forLR[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                                                                      df.interval$Interval == t] - v)
+    
+    # save the difference between the positive and the negative LR
+    df.interval$LR_efficacy_Pos_min_Neg[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                          df.interval$Interval == t] = learning_rates$positive_learning_rate[s] - learning_rates$negative_learning_rate[s]
+    
+    # if the signed pe is positive
+    if (df.interval$signed_PE_efficacy[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                       df.interval$Interval == t] > 0) {
+      
+      
+      
+      # calculate the size of the update (the learning rate times the prediction error)
+      df.interval$mbased_efficacy_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                           df.interval$Interval == t] = learning_rates$positive_learning_rate[s] * df.interval$signed_PE_efficacy[df.interval$SubID ==
+                                                                                                                                                       unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      # save the absolute value of the update
+      df.interval$mbased_efficacy_absolute_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                    df.interval$Interval == t] =  abs(df.interval$mbased_efficacy_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                                                                                              df.interval$Interval == t])
+      
+      # calculate the effiacy estimate (expected efficacy plus the update - the learning rate-weighted prediction error)
+      df.interval$mbased_efficacy[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                    df.interval$Interval == t] = v + df.interval$mbased_efficacy_update[df.interval$SubID == unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      
+      # update the value
+      v = v + df.interval$mbased_efficacy_update[df.interval$SubID == unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      
+      # save the learning rate value
+      df.interval$LR_efficacy[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                df.interval$Interval == t] = learning_rates$positive_learning_rate[s]
+      
+      # save the positive learning rate value
+      df.interval$LR_efficacy_positive[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                         df.interval$Interval == t] = learning_rates$positive_learning_rate[s]
+      
+      # if the rpe is negative
+    } else {
+      
+      # calculate the size of the update (the learning rate times the prediction error)
+      df.interval$mbased_efficacy_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                           df.interval$Interval == t] = learning_rates$negative_learning_rate[s] * df.interval$signed_PE_efficacy[df.interval$SubID ==
+                                                                                                                                                       unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      # save the absolute value of the update
+      df.interval$mbased_efficacy_absolute_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                    df.interval$Interval == t] =  abs(df.interval$mbased_efficacy_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                                                                                              df.interval$Interval == t])
+      
+      # calculate the effiacy estimate (expected efficacy plus the update - the learning rate-weighted prediction error)
+      df.interval$mbased_efficacy[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                    df.interval$Interval == t] = v + df.interval$mbased_efficacy_update[df.interval$SubID == unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      
+      # update the value
+      v = v + df.interval$mbased_efficacy_update[df.interval$SubID == unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      
+      # save the learning rate value
+      df.interval$LR_efficacy[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                df.interval$Interval == t] = learning_rates$negative_learning_rate[s]
+      
+      # save the positive learning rate value
+      df.interval$LR_efficacy_negative[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                         df.interval$Interval == t] = learning_rates$negative_learning_rate[s]
+      
+    }
+    
+    
+  }
+}
+
+
+#### Import the learning rates for reward rate###### 
+learning_rates = read.csv("../../RL_fitting/4_Intercept_Pos_and_neg_learning_rate/results/learning_rates_reward.csv", header = F)
+
+# add the subject names
+learning_rates$SubID = unique(df.interval$SubID)
+
+# rename the variable names
+colnames(learning_rates)[1] <- "positive_learning_rate"
+colnames(learning_rates)[2] <- "negative_learning_rate"
+colnames(learning_rates)[3] <- "initial_bias"
+colnames(learning_rates)[5] <- "subject"
+colnames(learning_rates)[6] <- "BIC"
+
+learning_rates_reward = learning_rates
+
+
+# add a new variable in the main dataset in which efficacy is coded as 1 or 0
+df.interval$IsRewarded_forLR = df.interval$reward
+
+##### Calculate the model-based reward rate estimate ######
+
+# for each subject
+for (s in 1:length(unique(df.interval$SubID))) {
+  # for each trial
+  for (t in 1:length(unique(df.interval$Interval))) {
+    # if this is the first trial use the inital estimate
+    if (t == 1) {
+      v = learning_rates$initial_bias[s]
+    } else {
+      v = v
+    }
+    
+    # save the BIC value
+    df.interval$BIC_reward[df.interval$SubID == unique(df.interval$SubID)[s] &
+                             df.interval$Interval == t] = learning_rates$BIC[s]
+    
+    # calculate the prediction error for this subject for this trial (difference between the actual and the expected efficacy)
+    df.interval$signed_PE_reward[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                   df.interval$Interval == t] = df.interval$IsRewarded_forLR[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                                                                  df.interval$Interval == t] - v
+    
+    # calculate the unsigned prediction error for this subject for this trial (absolute difference between the actual and the expected efficacy)
+    df.interval$unsigned_PE_reward[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                     df.interval$Interval == t] = abs(df.interval$IsRewarded_forLR[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                                                                        df.interval$Interval == t] - v)
+    
+    # if the rpe is positive
+    if (df.interval$signed_PE_reward[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                     df.interval$Interval == t] > 0) {
+      
+      # calculate the size of the update (the learning rate times the prediction error)
+      df.interval$mbased_reward_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                         df.interval$Interval == t] = learning_rates$positive_learning_rate[s] * df.interval$signed_PE_reward[df.interval$SubID ==
+                                                                                                                                                   unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      # save the absolute value of the update
+      df.interval$mbased_reward_absolute_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                  df.interval$Interval == t] =  abs(df.interval$mbased_reward_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                                                                                          df.interval$Interval == t])
+      
+      # calculate the reward estimate (expected reward plus the update - the learning rate-weighted prediction error)
+      df.interval$mbased_reward[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                  df.interval$Interval == t] = v + df.interval$mbased_reward_update[df.interval$SubID == unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      
+      # update the value
+      v = v + df.interval$mbased_reward_update[df.interval$SubID == unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      
+      # save the learning rate value
+      df.interval$LR_reward[df.interval$SubID == unique(df.interval$SubID)[s] &
+                              df.interval$Interval == t] = learning_rates$positive_learning_rate[s]
+      
+      # save the positive learning rate value
+      df.interval$LR_reward_positive[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                       df.interval$Interval == t] = learning_rates$positive_learning_rate[s]
+      
+      # if the rpe is negative
+    } else {
+      
+      # calculate the size of the update (the learning rate times the prediction error)
+      df.interval$mbased_reward_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                         df.interval$Interval == t] = learning_rates$negative_learning_rate[s] * df.interval$signed_PE_reward[df.interval$SubID ==
+                                                                                                                                                   unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      # save the absolute value of the update
+      df.interval$mbased_reward_absolute_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                  df.interval$Interval == t] =  abs(df.interval$mbased_reward_update[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                                                                                                          df.interval$Interval == t])
+      
+      # calculate the reward estimate (expected efficacy plus the update - the learning rate-weighted prediction error)
+      df.interval$mbased_reward[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                  df.interval$Interval == t] = v + df.interval$mbased_reward_update[df.interval$SubID == unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      
+      # update the value
+      v = v + df.interval$mbased_reward_update[df.interval$SubID == unique(df.interval$SubID)[s] & df.interval$Interval == t]
+      
+      # save the learning rate value
+      df.interval$LR_reward[df.interval$SubID == unique(df.interval$SubID)[s] &
+                              df.interval$Interval == t] = learning_rates$negative_learning_rate[s]
+      
+      # save the positive learning rate value
+      df.interval$LR_reward_negative[df.interval$SubID == unique(df.interval$SubID)[s] &
+                                       df.interval$Interval == t] = learning_rates$negative_learning_rate[s]
+      
+    }
+    
+    
+  }
+}
+
+
+# Create a previous value variable (for predicting everything before the new feedback participants rely on the value from the previous trial)
+df.interval = ddply(df.interval,.(SubID),transform,
+                    mbased_reward_prev = append(mbased_reward,NA,after=0)[-(length(mbased_reward)+1)],
+                    mbased_efficacy_prev = append(mbased_efficacy,NA,after=0)[-(length(mbased_efficacy)+1)])
+
+
+
+```
+
+
+
+
+
+# Exclude participants based on accuracy 
+
+
+```{r, results='asis' }
+# Accuracy
+summary_table = ddply(df.trial,.(SubID),plyr::summarize,
+                      MeanRT=mean(AccRT,na.rm=TRUE), # mean RT per condition
+                      SDRT=sd(AccRT,na.rm=TRUE),
+                      MeanAcc=mean(hit,na.rm=TRUE))
+
+print(kable(summary_table, align="l", caption="Accuracy per subject"))
+
+sub.exclude.accuracy = summary_table$SubID[which(summary_table$MeanAcc<0.7)]
+
+#Exclude from interval level data
+df.interval <- df.interval %>%
+  filter(!SubID %in% sub.exclude.accuracy)
+
+#Exclude from trial level data
+df.trial <- df.trial %>%
+  filter(!SubID %in% sub.exclude.accuracy)
+# 
+# #Excluded`r length(sub.exclude.accuracy)` participants based on accuracy
+
+```
+
+# Exclude too fast and too slow RTs (<250ms & >2000ms) 
+
+
+```{r, results='asis' }
+
+# Too fast
+df.trial <- df.trial %>%
+  filter(rt>thresh_minRT_performed)
+
+# Too slow
+df.trial <- df.trial %>%
+  filter(rt<thresh_maxRT_performed)
+
+```
+
+
+
+
+
+# Efficacy estimates
+
+### Histogram
+
+```{r,warning=FALSE, message=FALSE }
+
+# Whole sample
+ggplot(df.interval, aes(EfficacyProbeResp)) + 
+  geom_histogram()+
+  ggtitle('Reported efficacy distribution - Whole sample') + 
+  theme_classic(base_size = 18) 
+
+# For each subject
+for (subject in 1:length(unique(df.interval$SubID))) {
+
+  #Plotting
+  plot_data = subset(df.interval,df.interval$SubID == unique(df.interval$SubID)[subject])
+  
+  efficacy_plot = ggplot(plot_data, aes(EfficacyProbeResp)) + 
+  geom_histogram()+
+  ggtitle(paste0('Reported efficacy distribution - Subject ',unique(df.interval$SubID)[subject])) +
+  theme_classic(base_size = 18) 
+
+  
+      print(efficacy_plot)
+}
+
+```
+
+### Estimated vs. true efficacy
+
+```{r,warning=FALSE, message=FALSE}
+
+for (subject in 1:length(unique(df.interval$SubID))) {
+
+  #Plotting
+  plot_data = subset(df.interval,df.interval$SubID == unique(df.interval$SubID)[subject])
+
+    # Efficacy
+
+    efficacy_plot = ggplot(data = plot_data, aes(x = plot_data$Interval))+
+      geom_line(mapping=aes(y=plot_data$runAvgEfficacy,color='Running average'),size=1.2) +
+      geom_line(mapping=aes(y=plot_data$mbased_efficacy,color='Model-based'),size=1.2) +
+      geom_point(mapping=aes(y=plot_data$EfficacyProbeResp,color='Actual estimates'),size = 4)+
+      ggtitle(paste0('Efficacy estimates - Subject ',unique(df.interval$SubID)[subject])) +
+      scale_color_manual(values = c(
+      'Running average' = 'blue',
+      'Model-based' = 'black',
+      'Actual estimates' = 'red')) +
+      labs(color = 'Efficacy')+
+      theme_classic(base_size = 18) +
+      theme(plot.title = element_text(size = 12, face = "bold"))+
+      xlab("Interval number") +
+      ylab("Efficacy") +
+      ylim(0,1.1) +
+      labs("True efficacy", "Estimated")
+  
+
+    print(efficacy_plot)
+}
+
+```
+
+
+
+
+### Learning rates
+
+```{r,warning=FALSE, message=FALSE}
+
+# Set parameters for plots
+set_theme(base =theme_bw(base_size = 15, base_family = "")) # font size and theme
+myColors = brewer.pal(3,"Set2") #colors
+# names(myColors) = levels(data$Congruency)
+# colScale = scale_colour_manual(name = "Congruency",values = myColors)
+barfill <- "#4271AE"
+barlines <- "#1F3552"
+
+# Positive efficacy learning rates 
+p =ggplot(learning_rates_efficacy, aes(positive_learning_rate)) + 
+        geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill
+        # ggtitle("Learning rates for the efficacy estimate\n") +
+        theme_bw() +
+        #scale_y_continuous(limits = c(0,8),breaks=seq(0, 10, by = 1)) + 
+        scale_x_continuous(limits = c(-0.01,1),breaks=seq(0, 1, by = 0.1)) + 
+        geom_vline(xintercept=mean(learning_rates_efficacy$positive_learning_rate), linetype="dashed", color = "black") +
+        geom_text(x=mean(learning_rates_efficacy$positive_learning_rate)+0.07, y=7, label=print(paste0("Mean =  ", round(mean(learning_rates_efficacy$positive_learning_rate),digits = 2))),size=5) + 
+
+
+        labs(x = "Positive learning rate", y = "Count\n")+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+p
+
+
+# Negative efficacy learning rates 
+p =ggplot(learning_rates_efficacy, aes(negative_learning_rate)) + 
+        geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill
+        # ggtitle("Learning rates for the efficacy estimate\n") +
+        theme_bw() +
+        #scale_y_continuous(limits = c(0,8),breaks=seq(0, 10, by = 1)) + 
+        scale_x_continuous(limits = c(-0.01,1),breaks=seq(0, 1, by = 0.1)) + 
+        geom_vline(xintercept=mean(learning_rates_efficacy$negative_learning_rate), linetype="dashed", color = "black") +
+        geom_text(x=mean(learning_rates_efficacy$negative_learning_rate)+0.07, y=7, label=print(paste0("Mean =  ", round(mean(learning_rates_efficacy$negative_learning_rate),digits = 2))),size=5) + 
+
+
+        labs(x = "Negative learning rate", y = "Count\n")+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+p
+
+
+# Positive vs. negative LRs 
+p =ggplot(learning_rates_efficacy, aes(positive_learning_rate,negative_learning_rate)) + 
+        geom_point(colour = barlines, fill = barfill,size = 4)+ #colour = barlines, fill = barfill
+        # ggtitle("Learning rates for the efficacy estimate\n") +
+        theme_bw() +
+        scale_y_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) + 
+        scale_x_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) + 
+        geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") +
+        ylim(0,1)+
+  xlim(0,1)+
+
+
+        labs(x = "\nPositive learning rate", y = "Negative learning rate\n")+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""),
+              text=element_text(colour="black", size = 18,family = ""),
+              axis.text.x=element_text(colour="black", size = 18,family = ""),
+              axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""),
+              axis.title=element_text(size=20,colour = "black",vjust = 1,family = ""))
+
+p
+```
+
+
+### Clustering
+
+```{r,warning=FALSE, message=FALSE}
+LR_all = cbind(learning_rates_efficacy,learning_rates_reward)
+
+colnames(LR_all) = c("PosLR_Eff",
+                     "NegLR_Eff",
+                     "Bias_Eff",
+                     "Variance_Eff",
+                     "Subject",
+                     "BIC_Eff",
+                     "SubID",
+                     "PosLR_Rew",
+                     "NegLR_Rew",
+                     "Bias_Rew",
+                     "Variance_Rew",
+                     "Subject",
+                     "BIC_Rew",
+                     "SubID2")
+LR_all = subset(LR_all,select=-c(Subject,SubID,SubID2))
+
+# Take only the Learning rates data for efficacy
+LR = subset(LR_all,select=c(PosLR_Eff,NegLR_Eff))
+clPairs(LR)
+
+# BICs for the models
+BIC <- mclustBIC(LR)
+plot(BIC)
+summary(BIC)
+
+# Fit the models
+mod1 <- Mclust(LR, x = BIC)
+summary(mod1, parameters = TRUE)
+
+#Plot the model
+plot(mod1, what = "classification")
+
+# Add Classification to the data
+LR_all$Class_Eff = mod1[["classification"]]
+
+
+# Take only the Learning rates data for reward
+LR = subset(LR_all,select=c(PosLR_Rew,NegLR_Rew))
+clPairs(LR)
+
+# BICs for the models
+BIC <- mclustBIC(LR)
+plot(BIC)
+summary(BIC)
+
+# Fit the models
+mod1 <- Mclust(LR, x = BIC)
+summary(mod1, parameters = TRUE)
+
+#Plot the model
+plot(mod1, what = "classification")
+
+# Add Classification to the data
+LR_all$Class_Rew = mod1[["classification"]]
+
+
+# Take only the BICs for efficacy
+LR = subset(LR_all,select=c(BIC_Eff,BIC_Rew))
+clPairs(LR)
+
+# BICs for the models
+BIC <- mclustBIC(LR)
+plot(BIC)
+summary(BIC)
+
+# Fit the models
+mod1 <- Mclust(LR, x = BIC)
+summary(mod1, parameters = TRUE)
+
+#Plot the model
+plot(mod1, what = "classification")
+
+# Add Classification to the data
+LR_all$Class_BICs = mod1[["classification"]]
+
+
+
+
+
+```
+
+
+## Predicting the efficacy probe response
+
+
+### Probe response vs. the running average
+
+```{r }
+
+m = lmer(EfficacyProbeResp ~  1 + runAvgEfficacy+ (runAvgEfficacy|SubID),df.interval)
+
+tab_model(m, show.re.var = T, show.icc = FALSE, show.ci = 0.95)
+
+p = plot_model(m,type = "pred", terms = "runAvgEfficacy")
+p + theme_classic()
+```
+
+
+### Probe response depending on previous efficacy
+
+```{r }
+
+df.interval = df.interval %>%
+     mutate_at(EfficacyLag,funs(recode(.,"0" = "Random","1" = "Performance"))) %>%
+      mutate_at(EfficacyLag,funs(factor(.)))
+
+m = lmer(EfficacyProbeResp ~ 1 + 
+          Efficacy_T0 + 
+          Efficacy_T1 + 
+          Efficacy_T2 + 
+          Efficacy_T3 + 
+          Efficacy_T4 +
+          Efficacy_T5 + 
+          Efficacy_T6 + 
+          Efficacy_T7 + 
+          Efficacy_T8 + 
+          Efficacy_T9 +
+           (1|SubID), 
+        df.interval,
+        contrasts=list(Efficacy_T0 = contr.sdif, 
+                       Efficacy_T1 = contr.sdif, 
+                       Efficacy_T2 = contr.sdif, 
+                       Efficacy_T3 = contr.sdif, 
+                       Efficacy_T4 = contr.sdif,
+                       Efficacy_T5 = contr.sdif, 
+                       Efficacy_T6 = contr.sdif, 
+                       Efficacy_T7 = contr.sdif, 
+                       Efficacy_T8 = contr.sdif, 
+                       Efficacy_T9 = contr.sdif))
+
+tab_model(m, show.re.var = T, show.icc = FALSE, show.ci = 0.95)
+
+p = coefplot(m, intercept = FALSE, decreasing = TRUE)
+
+p = p +  scale_y_discrete(labels= c(
+          "t-9",
+          "t-8",
+          "t-7",
+          "t-6",
+          "t-5",
+          "t-4",
+          "t-3",
+          "t-2",
+          "t-1",
+          "t")) +
+  
+  geom_vline(xintercept=0, linetype="dashed", color = "black") +
+  
+  labs(x = "Regression estimate", y = "Efficacy feedback\n") + 
+  scale_x_continuous(limits = c(-0.3,0.3),breaks=seq(-3, 0.3, by = 0.1)) + 
+
+  
+  # ggtitle("Predicting reported efficacy\n") + 
+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+```
+
+
+
+
+
+# Reward estimates
+
+### Histogram
+
+```{r,warning=FALSE, message=FALSE }
+
+# Whole sample
+ggplot(df.interval, aes(RewardProbeResp)) + 
+  geom_histogram()+
+  ggtitle('Reported reward distribution - Whole sample') + 
+  theme_classic(base_size = 18) 
+
+# For each subject
+for (subject in 1:length(unique(df.interval$SubID))) {
+
+  #Plotting
+  plot_data = subset(df.interval,df.interval$SubID == unique(df.interval$SubID)[subject])
+  
+  reward_plot = ggplot(plot_data, aes(RewardProbeResp)) + 
+  geom_histogram()+
+  ggtitle(paste0('Reported reward distribution - Subject ',unique(df.interval$SubID)[subject])) +
+  theme_classic(base_size = 18) 
+
+  
+      print(reward_plot)
+}
+
+```
+
+### Estimated vs. true reward
+
+```{r,warning=FALSE, message=FALSE}
+
+for (subject in 1:length(unique(df.interval$SubID))) {
+
+  #Plotting
+  plot_data = subset(df.interval,df.interval$SubID == unique(df.interval$SubID)[subject])
+
+    # Reward
+
+    reward_plot = ggplot(data = plot_data, aes(x = plot_data$Interval))+
+      geom_line(mapping=aes(y=plot_data$runAvgReward,color='Running average'),size=1.2) +
+      geom_line(mapping=aes(y=plot_data$mbased_reward,color='Model-based'),size=1.2) +
+      geom_point(mapping=aes(y=plot_data$RewardProbeResp,color='Actual estimates'),size = 4)+
+      ggtitle(paste0('Reward estimates - Subject ',unique(df.interval$SubID)[subject])) +
+      scale_color_manual(values = c(
+      'Running average' = 'blue',
+      'Model-based' = 'black',
+      'Actual estimates' = 'red')) +
+      labs(color = 'Reward')+
+      theme_classic(base_size = 18) +
+      theme(plot.title = element_text(size = 12, face = "bold"))+
+      xlab("Interval number") +
+      ylab("Reward") +
+      ylim(0,1.8) +
+      labs("True reward", "Estimated")
+  
+
+    print(reward_plot)
+}
+
+```
+
+
+
+## Predicting the reward probe response
+
+
+### Probe response vs. the running average
+
+```{r }
+
+m = lmer(RewardProbeResp ~  1 + runAvgReward+ (runAvgReward|SubID),df.interval)
+
+tab_model(m, show.re.var = T, show.icc = FALSE, show.ci = 0.95)
+
+p = plot_model(m,type = "pred", terms = "runAvgReward")
+p + theme_classic()
+```
+
+
+### Probe response by previous feedbacks
+
+```{r }
+
+df.interval = df.interval %>%
+     mutate_at(RewardLag,funs(factor(.)))
+
+m = lmer(RewardProbeResp ~ 1 + 
+          Reward_T0 + 
+          Reward_T1 + 
+          Reward_T2 + 
+          Reward_T3 + 
+          Reward_T4 +
+          Reward_T5 + 
+          Reward_T6 + 
+          Reward_T7 + 
+          Reward_T8 + 
+          Reward_T9 +
+           (1|SubID), 
+        df.interval)
+
+tab_model(m, show.re.var = T, show.icc = FALSE, show.ci = 0.95)
+
+p = coefplot(m, intercept = FALSE, decreasing = TRUE)
+
+p = p +  scale_y_discrete(labels= c(
+          "t-9",
+          "t-8",
+          "t-7",
+          "t-6",
+          "t-5",
+          "t-4",
+          "t-3",
+          "t-2",
+          "t-1",
+          "t")) +
+  
+  geom_vline(xintercept=0, linetype="dashed", color = "black") +
+  
+  labs(x = "Regression estimate", y = "Reward feedback\n") + 
+  scale_x_continuous(limits = c(-0.3,0.3),breaks=seq(-3, 0.3, by = 0.1)) + 
+
+  
+  # ggtitle("Predicting reported efficacy\n") + 
+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+```
+
+
+# Exclude participants based on efficacy learning
+
+
+## Clustering
+```{r, results='asis' }
+
+# Exclude subjects with flat efficacy estimates
+LR_all = cbind(learning_rates_efficacy,learning_rates_reward)
+
+colnames(LR_all) = c("PosLR_Eff",
+                     "NegLR_Eff",
+                     "Bias_Eff",
+                     "Variance_Eff",
+                     "Subject",
+                     "BIC_Eff",
+                     "SubID",
+                     "PosLR_Rew",
+                     "NegLR_Rew",
+                     "Bias_Rew",
+                     "Variance_Rew",
+                     "Subject",
+                     "BIC_Rew",
+                     "SubID2")
+LR_all = subset(LR_all,select=-c(Subject,SubID,SubID2))
+
+# Exclude the people with low accuracy
+LR_all <- LR_all %>%
+  filter(!Subject %in% sub.exclude.accuracy)
+
+# Take only the Learning rates data for efficacy
+LR = subset(LR_all,select=c(PosLR_Eff,NegLR_Eff))
+clPairs(LR)
+
+# BICs for the models
+BIC <- mclustBIC(LR)
+plot(BIC)
+summary(BIC)
+
+# Fit the models
+mod1 <- Mclust(LR, x = BIC)
+summary(mod1, parameters = TRUE)
+
+#Plot the model
+plot(mod1, what = "classification")
+
+# Add Classification to the data
+LR_all$Class_Eff = mod1[["classification"]]
+
+sub.exclude.efficacy = subset(LR_all,LR_all$Class_Eff==1)
+
+# Add one subject who has 0 variance in the reward probe responses, thus having NAs after the within-subject z-scoring
+sub.exclude.efficacy = append(sub.exclude.efficacy,40)
+
+#Exclude from interval level data
+df.interval <- df.interval %>%
+  filter(!SubID %in% sub.exclude.efficacy$Subject)
+
+#Exclude from trial level data
+df.trial <- df.trial %>%
+  filter(!SubID %in% sub.exclude.efficacy$Subject)
+
+
+```
+
+
+Excluded`r length(sub.exclude.efficacy$Subject)` participants based on very low learning rates for efficacy
+
+`r sub.exclude.efficacy$Subject`
+
+
+
+## Histograms LRs
+```{r, results='asis' }
+
+LR_all$Class_Eff=as.factor(LR_all$Class_Eff)
+
+# Positive LRs
+ggplot(LR_all, aes(x=PosLR_Eff,fill=Class_Eff,color=Class_Eff)) + 
+  geom_histogram( position="identity", alpha=0.5,bins=80)+
+  ggtitle('Positive learning rates') + 
+  theme_classic(base_size = 15) 
+
+# Negative LRs
+ggplot(LR_all, aes(x=NegLR_Eff,fill=Class_Eff,color=Class_Eff)) + 
+  geom_histogram( position="identity", alpha=0.5,bins=80)+
+  ggtitle('Negative learning rates') + 
+  theme_classic(base_size = 15) 
+
+
+# Efficacy LRs correlation
+model=lm(PosLR_Eff ~  NegLR_Eff , 
+               data = LR_all, REML=F)
+
+tab_model(model,title = "LR correlation efficacy")
+
+p = plot_model(model,type = "pred", terms = "NegLR_Eff", show.data = T,title = "LR correlation efficacy")
+p + theme_classic() + labs(x="Negative LR efficacy", y = "Positive LR efficacy")
+
+
+# Reward LRs correlation
+model=lm(PosLR_Rew ~  NegLR_Rew , 
+               data = LR_all, REML=F)
+
+tab_model(model,title = "LR correlation reward")
+
+p = plot_model(model,type = "pred", terms = "NegLR_Rew", show.data = T,title = "LR correlation reward")
+p + theme_classic() + labs(x="Negative LR reward", y = "Positive LR reward")
+
+# Positive LRs correlation
+model=lm(PosLR_Eff ~  PosLR_Rew , 
+               data = LR_all, REML=F)
+
+tab_model(model,title = "Positive LR correlation")
+
+p = plot_model(model,type = "pred", terms = "PosLR_Rew", show.data = T,title = "Positive LR correlation")
+p + theme_classic() + labs(x="Positive LR reward", y = "Positive LR efficacy")
+
+
+
+# Negative LRs correlation
+model=lm(NegLR_Eff ~  NegLR_Rew , 
+               data = LR_all, REML=F)
+
+tab_model(model,title = "Negative LR correlation")
+
+p = plot_model(model,type = "pred", terms = "NegLR_Rew", show.data = T,title = "Negative LR correlation")
+p + theme_classic() + labs(x="Negative LR reward", y = "Negative LR efficacy")
+```
+
+
+Excluded`r length(sub.exclude.efficacy$Subject)` participants based on very low learning rates for efficacy
+
+
+
+# Join the efficacy estimates with the trial-data
+ 
+```{r include=FALSE}
+
+df.trial.combined<-df.trial
+
+df.trial.combined = join(df.trial.combined,df.interval, by = c("SubID", "blockNum", "intervalNum"),type="left")
+
+# Change back the names of the columns
+names(df.trial.combined)[names(df.trial.combined) == "scaledIntervalLength.x"] <- "scaledIntervalLength"
+names(df.trial.combined)[names(df.trial.combined) == "scaledIntervalSessionNum.x"] <- "scaledIntervalSessionNum"
+
+df.interval.combined<-df.interval
+```
+
+# Re-scale the data
+
+```{r }
+
+# Center the continuous variables 
+df.interval.combined$EfficacyProbeResp = scale(df.interval.combined$EfficacyProbeResp, scale= FALSE, center = TRUE)
+df.interval.combined$EfficacyProbeRespLin = scale(df.interval.combined$EfficacyProbeRespLin, scale= FALSE, center = TRUE)
+df.interval.combined$EfficacyProbeRespLin_prev = scale(df.interval.combined$EfficacyProbeRespLin_prev, scale= FALSE, center = TRUE)
+
+# Z-score within subject
+for (s in 1:length(unique(df.interval.combined$SubID))){
+  df.interval.combined$mbased_efficacy_prev[df.interval.combined$SubID == unique(df.interval.combined$SubID)[s]] = scale(df.interval.combined$mbased_efficacy_prev[df.interval.combined$SubID == unique(df.interval.combined$SubID)[s]], center = TRUE, scale = TRUE)
+}
+
+for (s in 1:length(unique(df.interval.combined$SubID))){
+  df.interval.combined$mbased_reward_prev[df.interval.combined$SubID == unique(df.interval.combined$SubID)[s]] = scale(df.interval.combined$mbased_reward_prev[df.interval.combined$SubID == unique(df.interval.combined$SubID)[s]], center = TRUE, scale = TRUE)
+}
+
+
+
+df.interval.combined$Interval = scale(df.interval.combined$Interval,scale= TRUE, center = TRUE)
+
+# Center the continuous variables 
+df.trial.combined$EfficacyProbeRespLin = scale(df.trial.combined$EfficacyProbeRespLin, scale= FALSE, center = TRUE)
+df.trial.combined$EfficacyProbeRespLin_prev = scale(df.trial.combined$EfficacyProbeRespLin_prev, scale= FALSE, center = TRUE)
+
+# Z-score within subject
+for (s in 1:length(unique(df.trial.combined$SubID))){
+  df.trial.combined$mbased_efficacy_prev[df.trial.combined$SubID == unique(df.trial.combined$SubID)[s]] = scale(df.trial.combined$mbased_efficacy_prev[df.trial.combined$SubID == unique(df.trial.combined$SubID)[s]], center = TRUE, scale = TRUE)
+}
+
+for (s in 1:length(unique(df.trial.combined$SubID))){
+  df.trial.combined$mbased_reward_prev[df.trial.combined$SubID == unique(df.trial.combined$SubID)[s]] = scale(df.trial.combined$mbased_reward_prev[df.trial.combined$SubID == unique(df.trial.combined$SubID)[s]], center = TRUE, scale = TRUE)
+}
+
+
+df.trial.combined$Interval = scale(df.trial.combined$Interval,scale= TRUE, center = TRUE)
+
+
+
+df.trial.combined$runAvgEfficacy = scale(df.trial.combined$runAvgEfficacy, scale= FALSE, center = TRUE)
+df.trial.combined$runAvgReward = scale(df.trial.combined$runAvgReward, scale= FALSE, center = TRUE)
+df.trial.combined$runAvgPerformance = scale(df.trial.combined$runAvgPerformance, scale= FALSE, center = TRUE)
+
+
+
+```
+
+
+# Save out for hddm
+```{r}
+# Save the data for HDDM 
+# Modify for hddm
+data_hddm = df.trial.combined
+
+# Delete the random errors (keep only the automatic ones)
+data_hddm = subset(data_hddm,data_hddm$ErrorType=="NoError" | data_hddm$ErrorType=="automatic")
+
+# Delete the rows without the efficacy/reward estimates and without the response (misses)
+data_hddm=data_hddm[!is.na(data_hddm$mbased_reward_prev) & !is.na(data_hddm$mbased_efficacy_prev),]
+
+#Save data for hddm
+colnames(data_hddm)[which(names(data_hddm) == "response")] = "response_fruit"
+colnames(data_hddm)[which(names(data_hddm) == "SubID")] = "subj_idx"
+colnames(data_hddm)[which(names(data_hddm) == "hit")] = "response"
+colnames(data_hddm)[which(names(data_hddm) == "type")] = "Congruency"
+
+data_hddm = data_hddm %>% ungroup()%>% dplyr::select(subj_idx,response, rt, Congruency,mbased_reward_prev,mbased_efficacy_prev)
+
+
+data_hddm = subset(data_hddm, (!is.na(data_hddm$rt)))
+
+data_hddm$rt = data_hddm$rt/1000
+
+data_hddm$Congruency = as.character(data_hddm$Congruency)
+
+write.csv(data_hddm,"data_hddm_LFXC_interval_allTrials.csv", row.names=FALSE)
+
+
+# 
+# # Subject 51
+# data51 = subset(data_hddm,subj_idx==51)
+# # Accuracy
+# summary_table = ddply(data51,.(response),plyr::summarize,
+#                       MeanRT=mean(rt,na.rm=TRUE), # mean RT per condition
+#                       SDRT=sd(rt,na.rm=TRUE),
+#                       MeanAcc=mean(response,na.rm=TRUE))
+# 
+# summary_table
+# 
+# 
+# data51$response = as.factor(data51$response)
+# x=ggplot(data51, aes(x=rt,color=response)) + 
+#   geom_density(fill="white", alpha=0.1, position="identity",bins = 60,size=1)+
+#   ggtitle('Sub 51 - All trials') + 
+#   theme_classic(base_size = 18) 
+# x
+# 
+# x=ggplot(subset(data51,Congruency=="incongruent"), aes(x=rt,color=response)) + 
+#   geom_density(fill="white", alpha=0.1, position="identity",bins = 60,size=1)+
+#   ggtitle('Sub 51 - Incongruent trials') + 
+#   theme_classic(base_size = 18) 
+# x
+# 
+# x=ggplot(subset(data51,Congruency=="congruent"), aes(x=rt,color=response)) + 
+#   geom_density(fill="white", alpha=0.1, position="identity",bins = 60,size=1)+
+#   ggtitle('Sub 51 - Congruent trials') + 
+#   theme_classic(base_size = 18) 
+# x
+```
+
+
+
+
+# Main analyses
+
+## Task Data Analysis (Trial-Based) 
+
+### Accuracy - Model-based
+```{r}
+model.acc.trial1<-glmer(hit ~ mbased_efficacy_prev + mbased_reward_prev  + type + scaledIntervalLength   +scaledIntervalCong+
+                   
+                  (1 + mbased_efficacy_prev |uniqueid),
+                data = df.trial.combined, family = binomial(link="logit"))
+
+tab_model(model.acc.trial1,title = "Accuracy - Trial Based")
+
+p = plot_model(model.acc.trial1,type = "pred", terms = "mbased_efficacy_prev")
+p + theme_classic() + labs(x="Model-based efficacy estimate", y = "Accuracy")
+
+p = plot_model(model.acc.trial1,type = "pred", terms = "type")
+p + theme_classic() 
+
+p = plot_model(model.acc.trial1,type = "pred", terms = c("mbased_efficacy_prev","type"))
+p + theme_classic() 
+
+
+
+p = coefplot(model.acc.trial1, intercept = FALSE, coefficients = c("mbased_efficacy_prev","mbased_reward_prev"))
+
+p = p +  
+  
+  geom_vline(xintercept=0, linetype="dashed", color = "black") +
+  
+  labs(x = "Regression estimate") + 
+  scale_x_continuous(limits = c(-1,1),breaks=seq(-1, 1, by = 0.2)) + 
+
+  
+  # ggtitle("Predicting reported efficacy\n") + 
+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+
+```
+
+
+
+
+
+
+### Response Time - Model-based
+
+```{r}
+
+
+
+model.accrt.trial1<-lmer(log10_AccRT ~ mbased_efficacy_prev + type + mbased_reward_prev + scaledIntervalLength +  scaledIntervalCong+
+                   
+                  (type + mbased_efficacy_prev  |uniqueid),
+                data = df.trial.combined, REML = F)
+
+tab_model(model.accrt.trial1,title = "RT - Trial Based")
+
+
+p = plot_model(model.accrt.trial1,type = "pred", terms = "mbased_efficacy_prev")
+p + theme_classic() + labs(x="Model-based efficacy estimate", y = "logRT")
+
+p = plot_model(model.accrt.trial1,type = "pred", terms = "type")
+p + theme_classic() 
+
+p = plot_model(model.accrt.trial1,type = "pred", terms = c("mbased_efficacy_prev","type"))
+p + theme_classic()
+
+
+
+p = coefplot(model.accrt.trial1, intercept = FALSE, coefficients = c("mbased_efficacy_prev","mbased_reward_prev"))
+
+p = p +  
+  
+  geom_vline(xintercept=0, linetype="dashed", color = "black") +
+  
+  labs(x = "Regression estimate") + 
+  scale_x_continuous(limits = c(-0.07,0.03),breaks=seq(-0.07,0.03, by = 0.02)) + 
+
+  
+  # ggtitle("Predicting reported efficacy\n") + 
+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+```
+
+
+
+
+
+

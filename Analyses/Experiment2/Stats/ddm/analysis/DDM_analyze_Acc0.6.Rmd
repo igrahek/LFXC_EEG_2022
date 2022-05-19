@@ -1,0 +1,414 @@
+---
+title: "DDM_analyze_LFXC_interval"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    fig_width: 14 
+    fig_height: 6 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Loading libraries
+
+```{r, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(purrr)
+library(tidyr)
+library(ggpubr)
+library(gridExtra)
+library(cowplot)
+library(sjPlot)
+library(RColorBrewer)
+library(knitr)
+library(data.table)
+
+# Functions
+test.params <- function(df) {
+  inner_join(inner_join(inner_join(df %>%
+                                     map_dfr(mean) %>%
+                                     gather(parameter, estimate, everything()) %>% dplyr::rename(Mean=estimate),
+                                   df %>%
+                                     map_dfr(sd) %>%
+                                     gather(parameter, estimate, everything()) %>% dplyr::rename(SD=estimate),by='parameter'),
+                        
+                        df %>% map(~ .x > 0) %>% 
+                          map_dfr(mean) %>%
+                          gather(parameter, pvalue, everything()) %>%
+                          mutate(pvalue = if_else(round(pvalue)==1, 1-pvalue, pvalue),
+                                 sig = if_else(pvalue < 0.001, "***",
+                                               if_else(pvalue < 0.01, "**",
+                                                       if_else(pvalue < 0.05, "*", "n.s."))))),
+             inner_join(df %>%
+                          map_dfr(function(x) return(quantile(x,0.975)[[1]])) %>%
+                          gather(parameter, estimate, everything()) %>% dplyr::rename(CI_upper=estimate),
+                        df %>% map_dfr(function(x) return(quantile(x,0.025)[[1]])) %>%
+                          gather(parameter, estimate, everything()) %>% dplyr::rename(CI_lower=estimate),by='parameter'),by='parameter') 
+}
+
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+# Base template
+gg <- list(
+  theme_bw(),
+  theme(plot.title = element_text(hjust = 0.5, size=13),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.spacing = unit(0.75, "lines"),
+        legend.box.spacing = unit(0.5, "lines"),
+        legend.position = "bottom",
+        legend.margin = margin(c(0, 0, 0, 0), unit='lines'))
+)
+
+# Density template
+ggdensity <- list(
+  gg,
+  theme(panel.spacing = unit(0.25, "lines"),
+        legend.key.size = unit(0.7, "lines"),
+        legend.direction = "horizontal",
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(),
+        legend.box.spacing = unit(0.25, "lines"))
+)
+```
+
+
+
+
+
+# Drift-Threshold model
+
+## Rhats
+
+```{r, message=FALSE}
+# Import the Rhats
+rhats <- fread('../output/LFXC/ae_only/Model2/Model2_RHat.csv',header = T)
+
+# Plot the Rhats
+
+# Set parameters for plots
+set_theme(base =theme_bw(base_size = 15, base_family = "")) # font size and theme
+myColors = brewer.pal(3,"Set2") #colors
+# names(myColors) = levels(data$Congruency)
+# colScale = scale_colour_manual(name = "Congruency",values = myColors)
+barfill <- "#4271AE"
+barlines <- "#1F3552"
+
+p =ggplot(rhats, aes(0)) +
+  geom_histogram(colour = barlines, fill = barfill,binwidth = 0.01)+ #colour = barlines, fill = barfill
+  # ggtitle("Punishment fixed\n") +
+  theme_bw() +
+  labs(x = "Rhat", y = "Count\n")+
+  theme(axis.line = element_line(size=1, colour = "black"),
+        panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+        panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+        text=element_text(colour="black", size = 14),
+        axis.text.x=element_text(colour="black", size = 14),
+        axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+        axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+
+
+# Print the names of the low Rhat parameters
+highRhats = subset(rhats,rhats$`0`>1.1)
+highRhats
+```
+
+
+
+## Trace plots
+
+
+```{r, message=FALSE}
+traces <- read.csv('../output/LFXC/ae_only/Model2/Model2_traces.csv')
+
+traces<-traces %>% dplyr::select(v_Intercept,
+                                 v_C.Congruency..Diff..D.incongruent.,
+                                 v_mbased_efficacy_prev,
+                                 v_mbased_reward_prev,
+                                 a_mbased_efficacy_prev,
+                                 a_mbased_reward_prev)%>%
+  mutate(a_mbased_reward_prev=0.5*a_mbased_reward_prev,
+         a_mbased_efficacy_prev=0.5*a_mbased_efficacy_prev)
+
+
+
+
+# For each parameter
+colNames= names(traces)
+
+for (parameter in colNames) {
+  
+  #Plotting
+  plot_data1 = traces[1:2000,]
+  plot_data2 = traces[2001:4000,]
+  plot_data3 = traces[4001:6000,]
+  plot_data4 = traces[6001:8000,]
+  plot_data5 = traces[8001:10000,]
+  
+  
+  
+  traces_plot = ggplot(NULL) +
+    
+    # Chain 1
+    geom_line(data=plot_data1,mapping =aes_string(y=parameter,x = 1:2000), colour="red")+
+    
+    # Chain 2
+    geom_line(data=plot_data2,mapping =aes_string(y=parameter,x = 1:2000), colour="royalblue1")+
+    
+    # Chain 3
+    geom_line(data=plot_data3,mapping =aes_string(y=parameter,x = 1:2000), colour="springgreen")+
+    
+    # Chain 4
+    geom_line(data=plot_data4,mapping =aes_string(y=parameter,x = 1:2000), colour="grey0")+
+    
+    # Chain 5
+    geom_line(data=plot_data5,mapping =aes_string(y=parameter,x = 1:2000), colour="coral")+
+    theme_classic(base_size = 18) +
+    
+    ggtitle(parameter)  + ylab("Parameter value") + xlab("Sample")
+  
+  
+  
+  print(traces_plot)
+}
+```
+
+
+
+
+## PPCs
+
+
+```{r, message=FALSE}
+
+df.ppc <- read.csv('../output/LFXC/ae_only/Model2/Model2_simData.csv') %>%
+  mutate(simResponse=rt_sampled>0,
+         Response=rt>0,
+         rt_unsigned = abs(rt),
+         rt_sampled_unsigned = abs(rt_sampled))
+
+df.ppc.data <- df.ppc %>% filter(sample==0)
+
+ratio.true <- sum(!df.ppc.data$Response)/sum(df.ppc.data$Response)
+
+ratio.simu <- sum(!df.ppc.data$simResponse)/sum(df.ppc.data$simResponse)
+
+# Density plots with means
+ggplot(df.ppc.data %>% filter(Response),
+       aes(x=rt_unsigned,color='Correct',linetype='True')) +
+  geom_density(size=1) +
+  geom_density(data=df.ppc.data %>% filter(!Response),
+               size=1,
+               aes(x=rt_unsigned,y=-..density..*0.1,color='Incorrect',linetype='True'),
+  ) +
+  geom_density(data=df.ppc %>% filter(simResponse),
+               size=1,
+               aes(x=rt_sampled_unsigned,color='Correct',linetype='Simulation')) +
+  geom_density(data=df.ppc %>% filter(!simResponse),
+               size=1,
+               aes(x=rt_sampled_unsigned,y=-..density..*0.1,color='Incorrect',linetype='Simulation'),
+  ) + geom_hline(yintercept=0) + ggdensity +
+  xlab('Reaction Time') + coord_cartesian(xlim=c(0,2)) + facet_grid(cols=vars(Congruency)) + scale_linetype_manual(name='Data:',values=c('Simulation'=1,'True'=2)) + scale_color_manual(name='Response:',values=c('Correct'='blue','Incorrect'='red'))
+```
+
+
+
+
+## Analyze the posteriors
+
+
+```{r, message=FALSE}
+
+traces <- read.csv('../output/LFXC/ae_only/Model2/Model2_traces.csv')
+# traces <- fread('output/AllTrials/ae_only/zScored/vConEffRewaEffRew_12000/vConEffRewaEffRew_12000_traces.csv')
+
+traces<-traces %>% dplyr::select(v_Intercept,
+                                 v_C.Congruency..Diff..D.incongruent.,
+                                 v_mbased_efficacy_prev,
+                                 v_mbased_reward_prev,
+                                 a_mbased_efficacy_prev,
+                                 a_mbased_reward_prev)%>%
+  mutate(a_mbased_reward_prev=0.5*a_mbased_reward_prev,
+         a_mbased_efficacy_prev=0.5*a_mbased_efficacy_prev)
+
+
+# Summarize the posteriors
+library(brms)
+output = as.data.frame(posterior_summary(traces))
+
+# Add the posterior probabilities
+output$pvalue = NA
+t = hypothesis(traces,"v_Intercept<0")
+output$pvalue[1] = t$hypothesis$Post.Prob
+
+t = hypothesis(traces,"v_C.Congruency..Diff..D.incongruent.<0")
+output$pvalue[2] = t$hypothesis$Post.Prob
+
+t = hypothesis(traces,"v_mbased_efficacy_prev<0")
+output$pvalue[3] = t$hypothesis$Post.Prob
+
+t = hypothesis(traces,"v_mbased_reward_prev<0")
+output$pvalue[4] = t$hypothesis$Post.Prob
+
+t = hypothesis(traces,"a_mbased_efficacy_prev<0")
+output$pvalue[5] = t$hypothesis$Post.Prob
+
+t = hypothesis(traces,"a_mbased_reward_prev<0")
+output$pvalue[6] = t$hypothesis$Post.Prob
+
+colnames(output) = c("Mean", "SD","CI_lower","CI_upper","PosteriorProb")
+output$parameter = rownames(output)
+rownames(output) = NULL
+
+# reorder column name
+output <- output[, c(6, 1,2,3,4,5)]
+
+# output <- test.params(traces)
+drift.rate<- output %>% filter(parameter %in% c('v_C.Congruency..Diff..D.incongruent.',
+                                                'v_mbased_efficacy_prev',
+                                                'v_mbased_reward_prev'))
+
+threshold<- output %>% filter(parameter %in% c('a_mbased_efficacy_prev',
+                                               'a_mbased_reward_prev'))
+
+va <- rbind(drift.rate,threshold) %>% separate(parameter,c('parameter','factor'),'_')
+
+labels <- c('Con-Inc','Efficacy','Efficacy','Reward','Reward')
+
+va$factor<-factor(va$factor,levels=c('v_C.Congruency..Diff..D.incongruent.',
+                                     'mbased_efficacy',
+                                     'mbased_reward',
+                                     'mbased_efficacy ',
+                                     'mbased_reward '))
+
+va$factor = c('Congruency','Efficacy','Reward','Efficacy ','Reward ')
+
+va$parameter<-factor(va$parameter,labels=c('Threshold','Drift'))
+
+p.estimate<-ggplot(va,aes(x=factor, y=Mean,fill=parameter)) +
+  geom_bar(stat="identity", position=position_dodge(width = 0.5),width=0.5) +
+  geom_errorbar(width=.1, size=1, position=position_dodge(width = .5),aes(ymin=CI_lower,ymax=CI_upper)) + ylab('Estimate') +
+  # xlab('')+ scale_y_continuous(labels = function(x) sprintf("%.1f", x)) + coord_cartesian(ylim=c(-0.2,0.5)) +
+  ggtitle('Threshold model')+
+  theme(axis.line = element_line(colour = "black"),plot.margin=grid::unit(c(5,15,5,5), "mm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0)),
+        text = element_text(size=20),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(hjust = 0.5,size = 20, face = "bold")) + geom_hline(yintercept=0) +
+  scale_x_discrete(labels= labels) +
+  scale_fill_manual(name="",values=c('#E6A024','#0673B3','red'))
+p.estimate
+
+kable(va)
+
+# Calculate the ratios on each side of zero
+length(subset(traces$v_mbased_efficacy_prev,traces$v_mbased_efficacy_prev<0))
+length(subset(traces$v_mbased_efficacy_prev,traces$v_mbased_efficacy_prev>0))
+
+# Drift efficacy effect
+print(paste0('Drift-Efficacy effect p<0 = ',length(subset(traces$v_mbased_efficacy_prev,traces$v_mbased_efficacy_prev<0))/length(subset(traces$v_mbased_efficacy_prev,traces$v_mbased_efficacy_prev>0))))
+
+
+# Threshold efficacy effect
+print(paste0('Threshold-Efficacy effect p<0 = ',length(subset(traces$a_mbased_efficacy_prev,traces$a_mbased_efficacy_prev>0))/length(subset(traces$a_mbased_efficacy_prev,traces$a_mbased_efficacy_prev<0))))
+
+
+
+# Make the forest plot
+
+# Make the y axis
+va = va[-1,]
+va$name = as.factor(paste(va$parameter, va$factor))
+
+pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/Figure5_E.pdf")
+p <- ggplot(data=va, aes(y=name, x=Mean, xmin=CI_lower, xmax=CI_upper))+ 
+
+#this adds the effect sizes to the plot
+geom_point(shape=19,size=3)+
+
+#adds the CIs
+geom_errorbarh(height=0.00,size=1) + 
+  scale_y_discrete(labels= c(
+          "Threshold - Reward rate",
+          "Threshold - Efficacy",
+          "Drift rate - Reward rate",
+          "Drift rate - Efficacy"),
+          limits = rev(levels(va$name)))
+
+p = p + 
+  
+  geom_vline(xintercept=0, linetype="dashed", color = "black") +
+  
+  labs(x = "Estimate", y = "Parameter\n") + 
+  scale_x_continuous(limits = c(-0.4,0.6),breaks=seq(-0.4,0.6, by = 0.2)) +
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 18,family = ""),
+              axis.text.x=element_text(colour="black", size = 18,family = ""),
+              axis.text.y=element_text(colour="black", size = 18,family = "", face = "plain",hjust=0),
+              axis.title=element_text(size=20,colour = "black",vjust = 1,family = ""))
+
+p
+dev.off()
+
+p
+```
+
+
+
+
+
+

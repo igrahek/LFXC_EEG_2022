@@ -1,0 +1,163 @@
+---
+title: "LFXC_interval - behavioral results"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    theme: default
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# About the code
+
+Experiment: FXC_ILR
+Version: TSS_LFXC20210602 --> probes every 3,4,5 intervals (36 efficacy probes)
+Code written by: Ivan Grahek & Mahalia Prater Fahey
+Description: Code for the analysis of behavioral data for the FXC_ILR project. This is an interval and garden task version of the LFXC task.  
+
+\newpage
+
+# Preprocessing
+
+## Importing data
+```{r, warning=FALSE, message=FALSE}
+# Clear environment and import data
+
+# clear the environment
+rm(list=ls()) 
+#load packages and install them if they're not installed
+if (!require("pacman")) install.packages("pacman")
+ pacman::p_load(plyr,Rmisc,yarrr,BayesFactor,reshape2,brms, broom, tidyverse, brmstools, BEST, knitr, here, zoo, magrittr, pracma,xtable, Hmisc, ppcor, lme4,MuMIn,MASS, sjPlot, jtools, lmerTest, sjstats,coefplot,R.matlab,RColorBrewer,cowplot,bayesplot,rstan,RColorBrewer,rstudioapi,corrplot,PCAmixdata,psych,rmarkdown,knitr,kable,mclust)
+
+ # set seed
+set.seed(42) 
+
+# import
+df.trial.combined=read.csv("Exp2Data_0.7Acc.csv")
+
+
+```
+
+
+# Main analyses
+
+## Task Data Analysis (Trial-Based) 
+
+### Accuracy - Model-based
+```{r}
+model.acc.trial1<-glmer(hit ~ mbased_efficacy_prev + mbased_reward_prev  + type + scaledIntervalLength   +scaledIntervalCong+
+                   
+                  (1 + mbased_efficacy_prev + type + mbased_reward_prev|uniqueid),
+                data = df.trial.combined, family = binomial(link="logit"))
+
+tab_model(model.acc.trial1,title = "Accuracy - Trial Based")
+
+p = plot_model(model.acc.trial1,type = "pred", terms = "mbased_efficacy_prev")
+p + theme_classic() + labs(x="Model-based efficacy estimate", y = "Accuracy")
+
+p = plot_model(model.acc.trial1,type = "pred", terms = "type")
+p + theme_classic() 
+
+p = plot_model(model.acc.trial1,type = "pred", terms = c("mbased_efficacy_prev","type"))
+p + theme_classic() 
+
+
+
+p = coefplot(model.acc.trial1, intercept = FALSE, coefficients = c("mbased_efficacy_prev","mbased_reward_prev"))
+
+p = p +  
+  
+  geom_vline(xintercept=0, linetype="dashed", color = "black") +
+  
+  labs(x = "Regression estimate") + 
+  scale_x_continuous(limits = c(-1,1),breaks=seq(-1, 1, by = 0.2)) + 
+
+  
+  # ggtitle("Predicting reported efficacy\n") + 
+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+
+```
+
+
+
+
+
+
+### Response Time - Model-based
+
+```{r}
+
+
+
+model.accrt.trial1<-lmer(log10_AccRT ~ mbased_efficacy_prev + type + mbased_reward_prev + scaledIntervalLength +  scaledIntervalCong+
+                   
+                  (1 + mbased_efficacy_prev  + type + mbased_reward_prev|uniqueid),
+                data = df.trial.combined, REML = F)
+
+tab_model(model.accrt.trial1,title = "RT - Trial Based")
+
+
+p = plot_model(model.accrt.trial1,type = "pred", terms = "mbased_efficacy_prev")
+p + theme_classic() + labs(x="Model-based efficacy estimate", y = "logRT")
+
+p = plot_model(model.accrt.trial1,type = "pred", terms = "type")
+p + theme_classic() 
+
+p = plot_model(model.accrt.trial1,type = "pred", terms = c("mbased_efficacy_prev","type"))
+p + theme_classic()
+
+
+
+p = coefplot(model.accrt.trial1, intercept = FALSE, coefficients = c("mbased_efficacy_prev","mbased_reward_prev"))
+
+p = p +  
+  
+  geom_vline(xintercept=0, linetype="dashed", color = "black") +
+  
+  labs(x = "Regression estimate") + 
+  scale_x_continuous(limits = c(-0.07,0.03),breaks=seq(-0.07,0.03, by = 0.02)) + 
+
+  
+  # ggtitle("Predicting reported efficacy\n") + 
+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+```
+
+
+
+
+
+

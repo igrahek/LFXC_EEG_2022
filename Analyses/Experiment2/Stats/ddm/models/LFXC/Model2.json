@@ -1,0 +1,26 @@
+{
+	"model":"Model2",
+	"study":"LFXC",
+	"data":"data_hddm_LFXC_interval_allTrials_0.6Acc",
+	"totalsample":12000,
+	"burnedsample":10000,
+	"predictors":{
+		"mbased_efficacy_prev":{
+			"type":"continuous"
+		},
+		"mbased_reward_prev":{
+			"type":"continuous"
+		},
+		"Congruency":{
+			"type":"category",
+			"levels":["incongruent","congruent"],
+			"contrast":"Diff"
+		}
+	},
+	"formula":["a ~ mbased_efficacy_prev + mbased_reward_prev",
+		       "v~mbased_efficacy_prev + mbased_reward_prev + Congruency"
+	],
+	"bias":false,
+	"includes":"p_outlier",
+	"errors":"ae_only"
+}

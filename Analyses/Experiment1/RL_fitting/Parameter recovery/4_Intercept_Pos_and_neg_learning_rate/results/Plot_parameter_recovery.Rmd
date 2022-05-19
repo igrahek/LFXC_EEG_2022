@@ -1,0 +1,370 @@
+---
+title: "Parameter recovery LFXC Exp1"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    fig_width: 6 
+    fig_height: 6 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(purrr)
+library(tidyr)
+library(ggpubr)
+library(gridExtra)
+library(cowplot)
+library(sjPlot)
+library(RColorBrewer)
+library(knitr)
+library(data.table)
+library(lme4)
+library(Hmisc)
+
+
+
+```
+
+
+
+# Noise = 0.15
+
+## Efficacy
+
+### Ground truth
+
+```{r, message=FALSE}
+# Import the data
+data = read.csv('learning_rates_efficacy_noise_0.15.csv',header = F)
+
+# Arrange
+colnames(data) = c('EstPosLR',
+                   'EstNegLR',
+                   'Intercept',
+                   'Noise',
+                   'Subject',
+                   'TruePosLR',
+                   'TrueNegLR',
+                   'TrueNoise')
+
+p =ggplot(data, aes(x=TruePosLR,y=TrueNegLR)) + 
+        geom_point(size = 3,alpha=0.8,fill='transparent')+ #colour = barlines, fill = barfill
+        ggtitle("Efficacy Learning Rates - Ground Truth\n") +
+        theme_bw() +
+        scale_y_continuous(limits = c(0,0.55),breaks=seq(0, 0.55, by = 0.1)) + 
+        scale_x_continuous(limits = c(0,0.55),breaks=seq(0, 0.55, by = 0.1)) + 
+        geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") +
+        ylim(0,0.55)+
+  xlim(0,0.55)+
+
+        labs(x = "\nPositive learning rate", y = "Negative learning rate\n")+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""),
+              text=element_text(colour="black", size = 18,family = ""),
+              axis.text.x=element_text(colour="black", size = 18,family = ""),
+              axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""),
+              axis.title=element_text(size=20,colour = "black",vjust = 1,family = ""))
+
+p
+
+```
+
+### Positive LR
+
+```{r, message=FALSE}
+
+# Stats
+
+model.pos = lm(TruePosLR ~ EstPosLR ,data = data)
+tab_model(model.pos,title = "Efficacy Positive LR")
+
+cor = rcorr(data$EstPosLR, data$TruePosLR, type="pearson")
+
+print(paste0("Pearson = ",cor$r[2]))
+print(paste0("R2 = ",cor$r[2]^2))
+
+
+
+#### Plot ####
+
+# Set parameters for plots
+set_theme(base =theme_bw(base_size = 15, base_family = "")) # font size and theme
+myColors = brewer.pal(3,"Set2") #colors
+# names(myColors) = levels(data$Congruency)
+# colScale = scale_colour_manual(name = "Congruency",values = myColors)
+barfill <- "#4271AE"
+barlines <- "#1F3552"
+
+pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/FigureS7_A.pdf")
+
+
+# Positive vs. negative LRs
+p =ggplot(data, aes(TruePosLR,EstPosLR)) +
+        geom_point(colour = barlines, fill = barfill,size = 4)+ #colour = barlines, fill = barfill
+        ggtitle("Positive LR - Efficacy") +
+        theme_bw() +
+        scale_y_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +
+        scale_x_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +
+        geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") +
+        ylim(0,0.4)+
+  xlim(0,0.4)+
+
+
+        labs(x = "\nGround truth", y = "Fit\n")+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+              panel.border = element_blank(),
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+dev.off()
+p
+
+```
+
+
+### Negative LR
+
+```{r, message=FALSE}
+# Stats
+
+model.pos = lm(TrueNegLR ~ EstNegLR ,data = data)
+tab_model(model.pos,title = "Efficacy Negative LR")
+
+# Correlation
+cor = rcorr(data$EstNegLR, data$TrueNegLR, type="pearson")
+
+print(paste0("Pearson = ",cor$r[2]))
+print(paste0("R2 = ",cor$r[2]^2))
+
+
+
+#### Plot ####
+
+# Set parameters for plots
+set_theme(base =theme_bw(base_size = 15, base_family = "")) # font size and theme
+myColors = brewer.pal(3,"Set2") #colors
+# names(myColors) = levels(data$Congruency)
+# colScale = scale_colour_manual(name = "Congruency",values = myColors)
+barfill <- "#4271AE"
+barlines <- "#1F3552"
+
+pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/FigureS7_B.pdf")
+
+
+# Positive vs. negative LRs
+p =ggplot(data, aes(TrueNegLR,EstNegLR)) +
+        geom_point(colour = barlines, fill = barfill,size = 4)+ #colour = barlines, fill = barfill
+        ggtitle("Negative LR - Efficacy") +
+        theme_bw() +
+        scale_y_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +
+        scale_x_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +
+        geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") +
+        ylim(0,0.4)+
+  xlim(0,0.4)+
+
+
+        labs(x = "\nGround truth", y = "Fit\n")+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+              panel.border = element_blank(),
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+dev.off()
+p
+
+```
+
+
+
+
+## Reward
+
+
+### Ground truth
+
+```{r, message=FALSE}
+# Import the data
+data = read.csv('learning_rates_reward_noise_0.15.csv',header = F)
+
+# Arrange
+colnames(data) = c('EstPosLR',
+                   'EstNegLR',
+                   'Intercept',
+                   'Noise',
+                   'Subject',
+                   'TruePosLR',
+                   'TrueNegLR',
+                   'TrueNoise')
+
+p =ggplot(data, aes(x=TruePosLR,y=TrueNegLR)) + 
+        geom_point(size = 3,alpha=0.8,fill='transparent')+ #colour = barlines, fill = barfill
+        ggtitle("Reward Learning Rates - Ground Truth\n") +
+        theme_bw() +
+        scale_y_continuous(limits = c(0,0.55),breaks=seq(0, 0.55, by = 0.1)) + 
+        scale_x_continuous(limits = c(0,0.55),breaks=seq(0, 0.55, by = 0.1)) + 
+        geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") +
+        ylim(0,0.55)+
+  xlim(0,0.55)+
+
+        labs(x = "\nPositive learning rate", y = "Negative learning rate\n")+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+            panel.grid.minor = element_line(colour = "grey",size = 0.1,linetype = "dashed"),
+              panel.border = element_blank(), 
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5,family = ""),
+              text=element_text(colour="black", size = 18,family = ""),
+              axis.text.x=element_text(colour="black", size = 18,family = ""),
+              axis.text.y=element_text(colour="black", size = 18, face = "plain",hjust=0,family = ""),
+              axis.title=element_text(size=20,colour = "black",vjust = 1,family = ""))
+
+p
+
+```
+
+### Positive LR
+
+```{r, message=FALSE}
+
+
+# Stats
+
+model.pos = lm(TruePosLR ~ EstPosLR ,data = data)
+tab_model(model.pos,title = "Reward Positive LR")
+
+# Correlation
+cor = rcorr(data$EstPosLR, data$TruePosLR, type="pearson")
+
+print(paste0("Pearson = ",cor$r[2]))
+print(paste0("R2 = ",cor$r[2]^2))
+
+
+
+#### Plot ####
+
+# Set parameters for plots
+set_theme(base =theme_bw(base_size = 15, base_family = "")) # font size and theme
+myColors = brewer.pal(3,"Set2") #colors
+# names(myColors) = levels(data$Congruency)
+# colScale = scale_colour_manual(name = "Congruency",values = myColors)
+barfill <- "#4271AE"
+barlines <- "#1F3552"
+
+pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/FigureS7_C.pdf")
+
+
+# Positive vs. negative LRs
+p =ggplot(data, aes(TruePosLR,EstPosLR)) +
+        geom_point(colour = barlines, fill = barfill,size = 4)+ #colour = barlines, fill = barfill
+        ggtitle("Positive LR - Reward") +
+        theme_bw() +
+        scale_y_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +
+        scale_x_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +
+        geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") +
+        ylim(0,0.4)+
+  xlim(0,0.4)+
+
+
+        labs(x = "\nGround truth", y = "Fit\n")+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+              panel.border = element_blank(),
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+dev.off()
+p
+```
+
+
+### Negative LR
+
+```{r, message=FALSE}
+# Stats
+
+model.pos = lm(TrueNegLR ~ EstNegLR ,data = data)
+tab_model(model.pos,title = "Reward Negative LR")
+
+# Correlation
+cor = rcorr(data$EstNegLR, data$TrueNegLR, type="pearson")
+
+print(paste0("Pearson = ",cor$r[2]))
+print(paste0("R2 = ",cor$r[2]^2))
+
+
+
+#### Plot ####
+
+# Set parameters for plots
+set_theme(base =theme_bw(base_size = 15, base_family = "")) # font size and theme
+myColors = brewer.pal(3,"Set2") #colors
+# names(myColors) = levels(data$Congruency)
+# colScale = scale_colour_manual(name = "Congruency",values = myColors)
+barfill <- "#4271AE"
+barlines <- "#1F3552"
+
+pdf(file="C:/Users/igrahek/Dropbox (Brown)/CLPS-ShenhavLab/EEG_Studies/Experiments/LFXC_EEG/Manuscript/plots/Figures/FigureS7_D.pdf")
+
+
+# Positive vs. negative LRs
+p =ggplot(data, aes(TrueNegLR,EstNegLR)) +
+        geom_point(colour = barlines, fill = barfill,size = 4)+ #colour = barlines, fill = barfill
+        ggtitle("Negative LR - Reward") +
+        theme_bw() +
+        scale_y_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +
+        scale_x_continuous(limits = c(0,1),breaks=seq(0, 1, by = 0.2)) +
+        geom_abline(intercept = 0,slope=1, linetype="dashed", color = "black") +
+        ylim(0,0.4)+
+  xlim(0,0.4)+
+
+
+        labs(x = "\nGround truth", y = "Fit\n")+
+  theme(axis.line = element_line(size=1, colour = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+              panel.border = element_blank(),
+              panel.background = element_blank(),
+              plot.title = element_text(size = 18,  face = "bold",hjust = 0.5),
+              text=element_text(colour="black", size = 14),
+              axis.text.x=element_text(colour="black", size = 14),
+              axis.text.y=element_text(colour="black", size = 14, face = "plain",hjust=0),
+              axis.title=element_text(size=18,colour = "black",vjust = 1))
+
+p
+dev.off()
+p
+```
+
+
